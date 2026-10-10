@@ -1,9 +1,12 @@
 package dev.wildfront.registry;
 
 import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 
 import dev.wildfront.Wildfront;
+import dev.wildfront.config.EventConfig;
 import dev.wildfront.event.EventRegistry;
 import dev.wildfront.event.WorldEvent;
 import dev.wildfront.event.type.MysteriousDiscoveryEvent;
@@ -33,5 +36,18 @@ public final class WildfrontEvents {
 
 	public static Collection<String> ids() {
 		return REGISTRY.ids();
+	}
+
+	/**
+	 * @return the default settings of every event, keyed by event id, in registration order
+	 */
+	public static Map<String, EventConfig> defaultConfigs() {
+		Map<String, EventConfig> defaults = new LinkedHashMap<>();
+
+		for (WorldEvent event : REGISTRY.all()) {
+			defaults.put(event.id(), event.defaultConfig());
+		}
+
+		return defaults;
 	}
 }

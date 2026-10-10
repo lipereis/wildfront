@@ -1,5 +1,7 @@
 package dev.wildfront.event;
 
+import dev.wildfront.config.EventConfig;
+
 /**
  * Scheduling parameters of one event, already validated and converted to game ticks.
  *
@@ -10,7 +12,15 @@ package dev.wildfront.event;
 public record EventSettings(boolean enabled, long cooldownTicks, double triggerChance) {
 	public static final int TICKS_PER_SECOND = 20;
 
+	public static EventSettings of(EventConfig config) {
+		return ofSeconds(config.enabled(), config.cooldownSeconds(), config.triggerChance());
+	}
+
 	public static EventSettings ofSeconds(boolean enabled, int cooldownSeconds, double triggerChance) {
-		return new EventSettings(enabled, (long) cooldownSeconds * TICKS_PER_SECOND, triggerChance);
+		return new EventSettings(enabled, ticks(cooldownSeconds), triggerChance);
+	}
+
+	public static long ticks(int seconds) {
+		return (long) seconds * TICKS_PER_SECOND;
 	}
 }

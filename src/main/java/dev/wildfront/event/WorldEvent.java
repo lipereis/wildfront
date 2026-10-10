@@ -1,6 +1,6 @@
 package dev.wildfront.event;
 
-import dev.wildfront.config.WildfrontConfig;
+import dev.wildfront.config.EventConfig;
 
 /**
  * Definition of one dynamic event. Implementations describe what the event needs and what it does;
@@ -12,13 +12,21 @@ public interface WorldEvent {
 	 */
 	String id();
 
-	EventSettings settings(WildfrontConfig config);
+	/**
+	 * @return the settings used when the config file does not override them
+	 */
+	EventConfig defaultConfig();
 
 	/**
-	 * Event-specific conditions. Called only after the cooldown and chance checks passed, on the
-	 * server thread. Must not load chunks or scan blocks.
+	 * Requirements beyond the configurable ones (distance, time of day, weather), which the event
+	 * manager checks itself. Called on the server thread. Must not load chunks or scan blocks.
 	 */
-	boolean canTrigger(EventContext context);
+	default boolean canTrigger(EventContext context) {
+		return true;
+	}
 
+	/**
+	 * Runs the event once for all {@link EventContext#participants()}.
+	 */
 	void trigger(EventContext context);
 }

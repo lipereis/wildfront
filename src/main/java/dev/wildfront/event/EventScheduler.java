@@ -7,18 +7,24 @@ import java.util.function.DoubleSupplier;
 /**
  * Decides whether an event may trigger. Contains no Minecraft types so the rules can be unit tested.
  *
- * <p>Checks run cheapest first: enabled flag, cooldown, chance roll and only then the event's own
- * conditions. The cooldown is recorded before the event action runs, so a failing action cannot
- * cause the event to fire again on the next check.
+ * <p>Checks run cheapest first: enabled flag, global cooldown, event cooldown, chance roll and only
+ * then the event's conditions. Cooldowns are recorded before the event action runs, so a failing
+ * action cannot cause the event to fire again on the next check.
  */
 public final class EventScheduler {
 	public enum Decision {
 		TRIGGERED,
 		DISABLED,
+		ON_GLOBAL_COOLDOWN,
 		ON_COOLDOWN,
 		CHANCE_FAILED,
 		CONDITIONS_NOT_MET
 	}
+
+	/**
+	 * Tracker key for "any event". Not a valid event id, so it can never collide with one.
+	 */
+	public static final String ANY_EVENT = "*";
 
 	private final DoubleSupplier random;
 
@@ -29,10 +35,17 @@ public final class EventScheduler {
 		this.random = random;
 	}
 
-	public Decision attempt(String eventId, EventSettings settings, CooldownTracker cooldowns, long now,
+	/**
+	 * @param globalCooldownTicks minimum game ticks after any event before another one may trigger
+	 */
+	public Decision attempt(String eventId, EventSettings settings, long globalCooldownTicks, CooldownTracker cooldowns, long now,
 			BooleanSupplier conditions, Runnable action) {
 		if (!settings.enabled()) {
 			return Decision.DISABLED;
+		}
+
+		if (isOnCooldown(cooldowns.lastTrigger(ANY_EVENT), now, globalCooldownTicks)) {
+			return Decision.ON_GLOBAL_COOLDOWN;
 		}
 
 		if (isOnCooldown(cooldowns.lastTrigger(eventId), now, settings.cooldownTicks())) {
@@ -52,11 +65,20 @@ public final class EventScheduler {
 	}
 
 	/**
-	 * Triggers the event unconditionally and starts its cooldown.
+	 * Triggers the event unconditionally and starts its cooldowns.
 	 */
 	public void force(String eventId, CooldownTracker cooldowns, long now, Runnable action) {
-		cooldowns.recordTrigger(eventId, now);
+		record(eventId, cooldowns, now);
 		action.run();
+	}
+
+	/**
+	 * Starts the event cooldown and the global cooldown without running anything. Used for players
+	 * who witness an event triggered by someone else.
+	 */
+	public static void record(String eventId, CooldownTracker cooldowns, long now) {
+		cooldowns.recordTrigger(eventId, now);
+		cooldowns.recordTrigger(ANY_EVENT, now);
 	}
 
 	public static boolean isOnCooldown(OptionalLong lastTrigger, long now, long cooldownTicks) {

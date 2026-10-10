@@ -10,6 +10,7 @@ import com.mojang.brigadier.exceptions.DynamicCommandExceptionType;
 
 import dev.wildfront.Wildfront;
 import dev.wildfront.config.ConfigManager;
+import dev.wildfront.config.EventConfig;
 import dev.wildfront.config.WildfrontConfig;
 import dev.wildfront.event.EventScheduler;
 import dev.wildfront.event.EventSettings;
@@ -79,19 +80,28 @@ public final class WildfrontCommands {
 		long now = source.getServer().overworld().getGameTime();
 
 		source.sendSuccess(() -> Component.literal("Wildfront events (automatic events "
-				+ (config.eventsEnabled() ? "on" : "off") + ", check every " + config.checkIntervalSeconds() + " s):"), false);
+				+ (config.eventsEnabled() ? "on" : "off") + ", check every " + config.checkIntervalSeconds() + " s"
+				+ ", global cooldown " + config.globalCooldownSeconds() + " s, share radius " + config.shareRadius() + "):"), false);
+
+		if (player != null) {
+			long remaining = EventScheduler.remainingCooldown(new PlayerCooldowns(player).lastTrigger(EventScheduler.ANY_EVENT),
+					now, EventSettings.ticks(config.globalCooldownSeconds()));
+			source.sendSuccess(() -> Component.literal(" Your global cooldown: " + formatRemaining(remaining)), false);
+		}
 
 		for (WorldEvent event : WildfrontEvents.all()) {
-			EventSettings settings = event.settings(config);
+			EventConfig eventConfig = config.event(event.id());
+			EventSettings settings = EventSettings.of(eventConfig);
 			StringBuilder line = new StringBuilder(" - ").append(event.id())
 					.append(settings.enabled() ? "" : " [disabled]")
-					.append(": cooldown ").append(settings.cooldownTicks() / EventSettings.TICKS_PER_SECOND).append(" s")
+					.append(": cooldown ").append(eventConfig.cooldownSeconds()).append(" s")
 					.append(", chance ").append(settings.triggerChance());
 
 			if (player != null) {
 				OptionalLong last = new PlayerCooldowns(player).lastTrigger(event.id());
-				long remaining = EventScheduler.remainingCooldown(last, now, settings.cooldownTicks());
-				line.append(", your cooldown: ").append(remaining == 0 ? "ready" : (remaining / EventSettings.TICKS_PER_SECOND) + " s left");
+				List<String> unmet = Wildfront.EVENTS.unmetConditions(event, player);
+				line.append(", your cooldown: ").append(formatRemaining(EventScheduler.remainingCooldown(last, now, settings.cooldownTicks())))
+						.append(unmet.isEmpty() ? ", conditions met" : ", waiting for: " + String.join("; ", unmet));
 			}
 
 			source.sendSuccess(() -> Component.literal(line.toString()), false);
@@ -100,12 +110,18 @@ public final class WildfrontCommands {
 		return WildfrontEvents.all().size();
 	}
 
+	private static String formatRemaining(long ticks) {
+		// Rounded up so that "ready" is only shown once the cooldown is really over.
+		return ticks == 0 ? "ready" : ((ticks + EventSettings.TICKS_PER_SECOND - 1) / EventSettings.TICKS_PER_SECOND) + " s left";
+	}
+
 	private static int trigger(CommandContext<CommandSourceStack> context, ServerPlayer target) throws CommandSyntaxException {
 		String id = StringArgumentType.getString(context, "event");
 		WorldEvent event = WildfrontEvents.get(id).orElseThrow(() -> UNKNOWN_EVENT.create(id));
 
-		Wildfront.EVENTS.forceTrigger(event, target);
-		context.getSource().sendSuccess(() -> Component.literal("Triggered '" + id + "' for ").append(target.getDisplayName()), true);
+		int witnesses = Wildfront.EVENTS.forceTrigger(event, target).size() - 1;
+		context.getSource().sendSuccess(() -> Component.literal("Triggered '" + id + "' for ").append(target.getDisplayName())
+				.append(witnesses > 0 ? " and " + witnesses + " nearby player(s)" : ""), true);
 		return 1;
 	}
 

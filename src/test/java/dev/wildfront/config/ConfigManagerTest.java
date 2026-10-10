@@ -27,20 +27,21 @@ class ConfigManagerTest {
 	void missingFileIsCreatedWithDefaultsAndLoadsBackCleanly() throws IOException {
 		Path file = directory.resolve("config").resolve("wildfront.json");
 
-		assertEquals(WildfrontConfig.DEFAULT, ConfigManager.load(file, LOGGER, problems));
+		assertEquals(ConfigParserTest.DEFAULT, ConfigManager.load(file, ConfigParserTest.EVENT_DEFAULTS, LOGGER, problems));
 		assertTrue(Files.exists(file));
 		assertTrue(Files.readString(file).contains("\"cooldownSeconds\": 600"));
+		assertTrue(Files.readString(file).contains("\"storm\""));
 
-		assertEquals(WildfrontConfig.DEFAULT, ConfigManager.load(file, LOGGER, problems));
+		assertEquals(ConfigParserTest.DEFAULT, ConfigManager.load(file, ConfigParserTest.EVENT_DEFAULTS, LOGGER, problems));
 		assertTrue(problems.isEmpty());
 	}
 
 	@Test
 	void editedFileIsLoaded() throws IOException {
 		Path file = directory.resolve("wildfront.json");
-		Files.writeString(file, "{\"mysteriousDiscovery\": {\"cooldownSeconds\": 20}}");
+		Files.writeString(file, "{\"events\": {\"discovery\": {\"cooldownSeconds\": 20}}}");
 
-		assertEquals(20, ConfigManager.load(file, LOGGER, problems).mysteriousDiscovery().cooldownSeconds());
+		assertEquals(20, ConfigManager.load(file, ConfigParserTest.EVENT_DEFAULTS, LOGGER, problems).event("discovery").cooldownSeconds());
 		assertTrue(problems.isEmpty());
 	}
 
@@ -50,7 +51,7 @@ class ConfigManagerTest {
 		String broken = "{ \"checkIntervalSeconds\": 5, ";
 		Files.writeString(file, broken);
 
-		assertEquals(WildfrontConfig.DEFAULT, ConfigManager.load(file, LOGGER, problems));
+		assertEquals(ConfigParserTest.DEFAULT, ConfigManager.load(file, ConfigParserTest.EVENT_DEFAULTS, LOGGER, problems));
 		assertEquals(1, problems.size());
 		assertEquals(broken, Files.readString(file));
 	}
@@ -60,7 +61,7 @@ class ConfigManagerTest {
 		Path file = directory.resolve("wildfront.json");
 		Files.writeString(file, "[1, 2, 3]");
 
-		assertEquals(WildfrontConfig.DEFAULT, ConfigManager.load(file, LOGGER, problems));
+		assertEquals(ConfigParserTest.DEFAULT, ConfigManager.load(file, ConfigParserTest.EVENT_DEFAULTS, LOGGER, problems));
 		assertEquals(1, problems.size());
 	}
 
@@ -69,7 +70,7 @@ class ConfigManagerTest {
 		Path file = directory.resolve("wildfront.json");
 		Files.writeString(file, "");
 
-		assertEquals(WildfrontConfig.DEFAULT, ConfigManager.load(file, LOGGER, problems));
+		assertEquals(ConfigParserTest.DEFAULT, ConfigManager.load(file, ConfigParserTest.EVENT_DEFAULTS, LOGGER, problems));
 		assertFalse(problems.isEmpty());
 	}
 
@@ -78,7 +79,7 @@ class ConfigManagerTest {
 		Path file = directory.resolve("wildfront.json");
 		Files.writeString(file, "{\"checkIntervalSeconds\": -1}");
 
-		assertEquals(WildfrontConfig.DEFAULT, ConfigManager.load(file, LOGGER, problems));
+		assertEquals(ConfigParserTest.DEFAULT, ConfigManager.load(file, ConfigParserTest.EVENT_DEFAULTS, LOGGER, problems));
 		assertEquals(1, problems.size());
 		assertTrue(problems.get(0).contains("checkIntervalSeconds"));
 	}

@@ -1,35 +1,56 @@
 package dev.wildfront.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
+import dev.wildfront.event.trigger.TimeOfDay;
+import dev.wildfront.event.trigger.Weather;
+
 import org.junit.jupiter.api.Test;
 
 class ConfigParserTest {
+	static final EventConfig DISCOVERY = new EventConfig(true, 600, 0.05, 128, TimeOfDay.ANY, Weather.ANY);
+	static final EventConfig STORM = new EventConfig(false, 1800, 0.5, 0, TimeOfDay.NIGHT, Weather.THUNDER);
+	static final Map<String, EventConfig> EVENT_DEFAULTS = eventDefaults();
+	static final WildfrontConfig DEFAULT = WildfrontConfig.defaults(EVENT_DEFAULTS);
+
 	private final List<String> warnings = new ArrayList<>();
 
+	private static Map<String, EventConfig> eventDefaults() {
+		Map<String, EventConfig> defaults = new LinkedHashMap<>();
+		defaults.put("discovery", DISCOVERY);
+		defaults.put("storm", STORM);
+		return defaults;
+	}
+
 	private WildfrontConfig parse(String json) {
-		return ConfigParser.parse(JsonParser.parseString(json).getAsJsonObject(), warnings);
+		return ConfigParser.parse(JsonParser.parseString(json).getAsJsonObject(), EVENT_DEFAULTS, warnings);
 	}
 
 	@Test
-	void emptyObjectGivesDefaultsWithoutWarnings() {
-		assertEquals(WildfrontConfig.DEFAULT, parse("{}"));
+	void emptyObjectGivesDefaultsForEveryEventWithoutWarnings() {
+		assertEquals(DEFAULT, parse("{}"));
+		assertEquals(DISCOVERY, DEFAULT.event("discovery"));
+		assertEquals(STORM, DEFAULT.event("storm"));
 		assertTrue(warnings.isEmpty());
 	}
 
 	@Test
 	void defaultsSurviveARoundTrip() {
-		JsonObject json = ConfigParser.toJson(WildfrontConfig.DEFAULT);
+		JsonObject json = ConfigParser.toJson(DEFAULT);
 
-		assertEquals(WildfrontConfig.DEFAULT, ConfigParser.parse(json, warnings));
+		assertEquals(DEFAULT, ConfigParser.parse(json, EVENT_DEFAULTS, warnings));
 		assertTrue(warnings.isEmpty());
+		assertEquals("night", json.getAsJsonObject("events").getAsJsonObject("storm").get("timeOfDay").getAsString());
 	}
 
 	@Test
@@ -38,15 +59,23 @@ class ConfigParserTest {
 				{
 					"eventsEnabled": false,
 					"checkIntervalSeconds": 2,
-					"mysteriousDiscovery": {
-						"enabled": false,
-						"cooldownSeconds": 15,
-						"triggerChance": 1,
-						"minDistanceFromSpawn": 0
+					"globalCooldownSeconds": 0,
+					"shareRadius": 0,
+					"events": {
+						"discovery": {
+							"enabled": false,
+							"cooldownSeconds": 15,
+							"triggerChance": 1,
+							"minDistanceFromSpawn": 0,
+							"timeOfDay": "night",
+							"weather": "RAIN"
+						}
 					}
 				}""");
 
-		assertEquals(new WildfrontConfig(false, 2, new WildfrontConfig.MysteriousDiscovery(false, 15, 1.0, 0)), config);
+		assertEquals(new WildfrontConfig(false, 2, 0, 0, Map.of(
+				"discovery", new EventConfig(false, 15, 1.0, 0, TimeOfDay.NIGHT, Weather.RAIN),
+				"storm", STORM)), config);
 		assertTrue(warnings.isEmpty());
 	}
 
@@ -55,19 +84,25 @@ class ConfigParserTest {
 		WildfrontConfig config = parse("""
 				{
 					"checkIntervalSeconds": 0,
-					"mysteriousDiscovery": {
-						"cooldownSeconds": -5,
-						"triggerChance": 1.5,
-						"minDistanceFromSpawn": 99999999999
+					"globalCooldownSeconds": -1,
+					"shareRadius": 100000,
+					"events": {
+						"discovery": {
+							"cooldownSeconds": -5,
+							"triggerChance": 1.5,
+							"minDistanceFromSpawn": 99999999999
+						}
 					}
 				}""");
 
-		assertEquals(WildfrontConfig.DEFAULT, config);
-		assertEquals(4, warnings.size(), warnings.toString());
-		assertTrue(warnings.get(0).contains("checkIntervalSeconds"));
-		assertTrue(warnings.get(1).contains("mysteriousDiscovery.cooldownSeconds"));
-		assertTrue(warnings.get(2).contains("mysteriousDiscovery.triggerChance"));
-		assertTrue(warnings.get(3).contains("mysteriousDiscovery.minDistanceFromSpawn"));
+		assertEquals(DEFAULT, config);
+		assertEquals(6, warnings.size(), warnings.toString());
+		assertTrue(warnings.stream().anyMatch(warning -> warning.contains("'checkIntervalSeconds'")));
+		assertTrue(warnings.stream().anyMatch(warning -> warning.contains("'globalCooldownSeconds'")));
+		assertTrue(warnings.stream().anyMatch(warning -> warning.contains("'shareRadius'")));
+		assertTrue(warnings.stream().anyMatch(warning -> warning.contains("'events.discovery.cooldownSeconds'")));
+		assertTrue(warnings.stream().anyMatch(warning -> warning.contains("'events.discovery.triggerChance'")));
+		assertTrue(warnings.stream().anyMatch(warning -> warning.contains("'events.discovery.minDistanceFromSpawn'")));
 	}
 
 	@Test
@@ -76,56 +111,108 @@ class ConfigParserTest {
 				{
 					"eventsEnabled": "yes",
 					"checkIntervalSeconds": "ten",
-					"mysteriousDiscovery": {
-						"enabled": 1,
-						"cooldownSeconds": 12.5,
-						"triggerChance": null,
-						"minDistanceFromSpawn": [64]
+					"events": {
+						"discovery": {
+							"enabled": 1,
+							"cooldownSeconds": 12.5,
+							"triggerChance": null,
+							"minDistanceFromSpawn": [64],
+							"timeOfDay": 5,
+							"weather": true
+						}
 					}
 				}""");
 
-		assertEquals(WildfrontConfig.DEFAULT, config);
-		assertEquals(6, warnings.size(), warnings.toString());
+		assertEquals(DEFAULT, config);
+		assertEquals(8, warnings.size(), warnings.toString());
+	}
+
+	@Test
+	void unknownEnumValueFallsBackAndListsTheAllowedOnes() {
+		WildfrontConfig config = parse("{\"events\": {\"storm\": {\"timeOfDay\": \"dusk\", \"weather\": \"snow\"}}}");
+
+		assertEquals(STORM, config.event("storm"));
+		assertEquals(2, warnings.size(), warnings.toString());
+		assertTrue(warnings.get(0).contains("[any, day, night]"), warnings.get(0));
+		assertTrue(warnings.get(0).contains("\"night\""), warnings.get(0));
+		assertTrue(warnings.get(1).contains("[any, clear, rain, thunder]"), warnings.get(1));
+	}
+
+	@Test
+	void enumValuesIgnoreCaseAndSurroundingSpaces() {
+		WildfrontConfig config = parse("{\"events\": {\"discovery\": {\"timeOfDay\": \" Day \", \"weather\": \"Thunder\"}}}");
+
+		assertEquals(TimeOfDay.DAY, config.event("discovery").timeOfDay());
+		assertEquals(Weather.THUNDER, config.event("discovery").weather());
+		assertTrue(warnings.isEmpty());
 	}
 
 	@Test
 	void numbersWrittenAsStringsAreRejected() {
-		assertEquals(WildfrontConfig.DEFAULT, parse("{\"checkIntervalSeconds\": \"5\"}"));
+		assertEquals(DEFAULT, parse("{\"checkIntervalSeconds\": \"5\"}"));
 		assertEquals(1, warnings.size());
 	}
 
 	@Test
-	void sectionOfTheWrongTypeUsesDefaultsForTheWholeSection() {
-		assertEquals(WildfrontConfig.DEFAULT, parse("{\"mysteriousDiscovery\": 5}"));
-		assertEquals(1, warnings.size());
+	void sectionsOfTheWrongTypeUseDefaultsForTheWholeSection() {
+		assertEquals(DEFAULT, parse("{\"events\": 5}"));
+		assertEquals(DEFAULT, parse("{\"events\": {\"discovery\": []}}"));
+		assertEquals(2, warnings.size(), warnings.toString());
+		assertTrue(warnings.get(1).contains("'events.discovery'"));
 	}
 
 	@Test
 	void oneBadValueDoesNotDiscardTheOthers() {
 		WildfrontConfig config = parse("""
-				{ "checkIntervalSeconds": 3, "mysteriousDiscovery": { "cooldownSeconds": 30, "triggerChance": -1 } }""");
+				{ "checkIntervalSeconds": 3, "events": { "discovery": { "cooldownSeconds": 30, "triggerChance": -1 } } }""");
 
 		assertEquals(3, config.checkIntervalSeconds());
-		assertEquals(30, config.mysteriousDiscovery().cooldownSeconds());
-		assertEquals(WildfrontConfig.MysteriousDiscovery.DEFAULT.triggerChance(), config.mysteriousDiscovery().triggerChance());
+		assertEquals(30, config.event("discovery").cooldownSeconds());
+		assertEquals(DISCOVERY.triggerChance(), config.event("discovery").triggerChance());
 		assertEquals(1, warnings.size());
 	}
 
 	@Test
+	void eachEventKeepsItsOwnDefaults() {
+		WildfrontConfig config = parse("{\"events\": {\"storm\": {\"enabled\": true}}}");
+
+		assertEquals(new EventConfig(true, 1800, 0.5, 0, TimeOfDay.NIGHT, Weather.THUNDER), config.event("storm"));
+		assertEquals(DISCOVERY, config.event("discovery"));
+	}
+
+	@Test
+	void unknownEventIsReportedAndIgnored() {
+		WildfrontConfig config = parse("{\"events\": {\"meteor\": {\"enabled\": true}}}");
+
+		assertEquals(DEFAULT, config);
+		assertEquals(1, warnings.size());
+		assertTrue(warnings.get(0).contains("'events.meteor'"));
+		assertThrows(IllegalArgumentException.class, () -> config.event("meteor"));
+	}
+
+	@Test
 	void unknownKeysAreIgnored() {
-		assertEquals(WildfrontConfig.DEFAULT, parse("{\"futureOption\": 1, \"mysteriousDiscovery\": {\"other\": true}}"));
+		assertEquals(DEFAULT, parse("{\"futureOption\": 1, \"events\": {\"discovery\": {\"other\": true}}}"));
 		assertTrue(warnings.isEmpty());
+	}
+
+	@Test
+	void sectionFromThePreviousFormatIsReported() {
+		assertEquals(DEFAULT, parse("{\"mysteriousDiscovery\": {\"cooldownSeconds\": 15}}"));
+		assertEquals(1, warnings.size());
+		assertTrue(warnings.get(0).contains("events.mysterious_discovery"));
 	}
 
 	@Test
 	void boundaryValuesAreAccepted() {
 		WildfrontConfig config = parse("""
-				{ "checkIntervalSeconds": 3600, "mysteriousDiscovery": { "cooldownSeconds": 604800, "triggerChance": 0, "minDistanceFromSpawn": 1000000 } }""");
+				{ "checkIntervalSeconds": 3600, "globalCooldownSeconds": 604800, "shareRadius": 512,
+				  "events": { "discovery": { "cooldownSeconds": 604800, "triggerChance": 0, "minDistanceFromSpawn": 1000000 } } }""");
 
 		assertEquals(3600, config.checkIntervalSeconds());
-		assertEquals(604800, config.mysteriousDiscovery().cooldownSeconds());
-		assertEquals(0.0, config.mysteriousDiscovery().triggerChance());
-		assertEquals(1_000_000, config.mysteriousDiscovery().minDistanceFromSpawn());
+		assertEquals(604800, config.globalCooldownSeconds());
+		assertEquals(512, config.shareRadius());
+		assertEquals(new EventConfig(true, 604800, 0.0, 1_000_000, TimeOfDay.ANY, Weather.ANY), config.event("discovery"));
 		assertTrue(warnings.isEmpty());
 	}
 }

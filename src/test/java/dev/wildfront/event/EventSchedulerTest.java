@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 class EventSchedulerTest {
 	private static final String EVENT = "test_event";
 	private static final long COOLDOWN = 1200;
+	private static final long GLOBAL_COOLDOWN = 0;
 	private static final EventSettings ALWAYS = new EventSettings(true, COOLDOWN, 1.0);
 
 	private final MapCooldownTracker cooldowns = new MapCooldownTracker();
@@ -22,7 +23,7 @@ class EventSchedulerTest {
 	private final AtomicInteger conditionChecks = new AtomicInteger();
 
 	private Decision attempt(EventScheduler scheduler, EventSettings settings, long now, boolean conditionsMet) {
-		return scheduler.attempt(EVENT, settings, cooldowns, now, () -> {
+		return scheduler.attempt(EVENT, settings, GLOBAL_COOLDOWN, cooldowns, now, () -> {
 			conditionChecks.incrementAndGet();
 			return conditionsMet;
 		}, triggers::incrementAndGet);
@@ -119,7 +120,7 @@ class EventSchedulerTest {
 	void cooldownIsRecordedEvenWhenTheActionFails() {
 		EventScheduler scheduler = rolling(0.0);
 
-		assertThrows(IllegalStateException.class, () -> scheduler.attempt(EVENT, ALWAYS, cooldowns, 100, () -> true, () -> {
+		assertThrows(IllegalStateException.class, () -> scheduler.attempt(EVENT, ALWAYS, GLOBAL_COOLDOWN, cooldowns, 100, () -> true, () -> {
 			throw new IllegalStateException("broken event");
 		}));
 
@@ -133,8 +134,8 @@ class EventSchedulerTest {
 		attempt(scheduler, ALWAYS, 100, true);
 
 		MapCooldownTracker otherPlayer = new MapCooldownTracker();
-		assertEquals(Decision.TRIGGERED, scheduler.attempt(EVENT, ALWAYS, otherPlayer, 100, () -> true, triggers::incrementAndGet));
-		assertEquals(Decision.TRIGGERED, scheduler.attempt("other_event", ALWAYS, cooldowns, 100, () -> true, triggers::incrementAndGet));
+		assertEquals(Decision.TRIGGERED, scheduler.attempt(EVENT, ALWAYS, GLOBAL_COOLDOWN, otherPlayer, 100, () -> true, triggers::incrementAndGet));
+		assertEquals(Decision.TRIGGERED, scheduler.attempt("other_event", ALWAYS, GLOBAL_COOLDOWN, cooldowns, 100, () -> true, triggers::incrementAndGet));
 		assertEquals(3, triggers.get());
 	}
 
@@ -187,6 +188,71 @@ class EventSchedulerTest {
 		}
 
 		assertEquals(hour / COOLDOWN, triggers.get());
+	}
+
+	@Test
+	void globalCooldownBlocksOtherEventsButNotForever() {
+		EventScheduler scheduler = rolling(0.0);
+		long global = 400;
+		scheduler.attempt(EVENT, ALWAYS, global, cooldowns, 100, () -> true, triggers::incrementAndGet);
+
+		assertEquals(Decision.ON_GLOBAL_COOLDOWN, scheduler.attempt("other_event", ALWAYS, global, cooldowns, 100 + global - 1, () -> true, triggers::incrementAndGet));
+		assertEquals(1, triggers.get());
+
+		assertEquals(Decision.TRIGGERED, scheduler.attempt("other_event", ALWAYS, global, cooldowns, 100 + global, () -> true, triggers::incrementAndGet));
+		assertEquals(2, triggers.get());
+	}
+
+	@Test
+	void eventCooldownStillAppliesAfterGlobalCooldownEnds() {
+		EventScheduler scheduler = rolling(0.0);
+		long global = 400;
+		scheduler.attempt(EVENT, ALWAYS, global, cooldowns, 100, () -> true, triggers::incrementAndGet);
+
+		assertEquals(Decision.ON_COOLDOWN, scheduler.attempt(EVENT, ALWAYS, global, cooldowns, 100 + global, () -> true, triggers::incrementAndGet));
+		assertEquals(Decision.TRIGGERED, scheduler.attempt(EVENT, ALWAYS, global, cooldowns, 100 + COOLDOWN, () -> true, triggers::incrementAndGet));
+	}
+
+	@Test
+	void globalCooldownLongerThanEventCooldownWins() {
+		EventScheduler scheduler = rolling(0.0);
+		long global = COOLDOWN * 2;
+		scheduler.attempt(EVENT, ALWAYS, global, cooldowns, 100, () -> true, triggers::incrementAndGet);
+
+		assertEquals(Decision.ON_GLOBAL_COOLDOWN, scheduler.attempt(EVENT, ALWAYS, global, cooldowns, 100 + COOLDOWN, () -> true, triggers::incrementAndGet));
+		assertEquals(Decision.TRIGGERED, scheduler.attempt(EVENT, ALWAYS, global, cooldowns, 100 + global, () -> true, triggers::incrementAndGet));
+	}
+
+	@Test
+	void failedAttemptsDoNotStartGlobalCooldown() {
+		assertEquals(Decision.CONDITIONS_NOT_MET, rolling(0.0).attempt(EVENT, ALWAYS, 400, cooldowns, 100, () -> false, triggers::incrementAndGet));
+		assertEquals(Decision.CHANCE_FAILED, rolling(0.9).attempt(EVENT, new EventSettings(true, COOLDOWN, 0.5), 400, cooldowns, 100, () -> true, triggers::incrementAndGet));
+
+		assertTrue(cooldowns.lastTrigger(EventScheduler.ANY_EVENT).isEmpty());
+	}
+
+	@Test
+	void witnessGetsBothCooldownsWithoutRunningAnything() {
+		MapCooldownTracker witness = new MapCooldownTracker();
+		EventScheduler.record(EVENT, witness, 100);
+		EventScheduler scheduler = rolling(0.0);
+
+		assertEquals(Decision.ON_GLOBAL_COOLDOWN, scheduler.attempt("other_event", ALWAYS, 400, witness, 200, () -> true, triggers::incrementAndGet));
+		assertEquals(Decision.ON_COOLDOWN, scheduler.attempt(EVENT, ALWAYS, 400, witness, 100 + 400, () -> true, triggers::incrementAndGet));
+		assertEquals(0, triggers.get());
+	}
+
+	@Test
+	void forceStartsGlobalCooldown() {
+		EventScheduler scheduler = rolling(0.0);
+		scheduler.force(EVENT, cooldowns, 100, triggers::incrementAndGet);
+
+		assertEquals(Decision.ON_GLOBAL_COOLDOWN, scheduler.attempt("other_event", ALWAYS, 400, cooldowns, 101, () -> true, triggers::incrementAndGet));
+	}
+
+	@Test
+	void globalKeyCannotBeAnEventId() {
+		assertThrows(IllegalArgumentException.class, () -> new EventRegistry<String>(id -> id).register(EventScheduler.ANY_EVENT));
 	}
 
 	@Test

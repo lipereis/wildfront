@@ -4,6 +4,7 @@ import java.util.Optional;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.block.state.BlockState;
@@ -34,7 +35,7 @@ public final class CacheSiteFinder {
 			int x = origin.getX() + offset[0];
 			int z = origin.getZ() + offset[1];
 
-			if (!level.hasChunkAt(x, z)) {
+			if (!level.hasChunk(SectionPos.blockToSectionCoord(x), SectionPos.blockToSectionCoord(z))) {
 				continue;
 			}
 

@@ -1,0 +1,38 @@
+# Builds the mod and runs the unit tests and the headless in-world game tests.
+# The client game test (gradlew runClientGameTest) needs a display and is run locally.
+name: build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Make the Gradle wrapper executable
+        run: chmod +x ./gradlew
+      - name: Build and test
+        run: ./gradlew build
+      - name: Upload mod jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: wildfront
+          path: build/libs/
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            build/reports/
+            build/test-results/

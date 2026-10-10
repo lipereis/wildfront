@@ -25,6 +25,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BarrelBlockEntity;
 import net.minecraft.world.phys.AABB;
@@ -39,17 +40,6 @@ public class WildfrontGameTest {
 
 	private static boolean isTracked(ServerLevel level, BlockPos pos) {
 		return DiscoveryManager.activeCaches(level).stream().map(ActiveCache::pos).anyMatch(pos::equals);
-	}
-
-	/**
-	 * Fills the floor of the 8x8x8 test area with stone, so every column has solid ground at y = 0.
-	 */
-	private static void buildFloor(GameTestHelper helper) {
-		for (int x = 0; x < 8; x++) {
-			for (int z = 0; z < 8; z++) {
-				helper.setBlock(x, 0, z, Blocks.STONE);
-			}
-		}
 	}
 
 	@GameTest
@@ -142,7 +132,7 @@ public class WildfrontGameTest {
 	@GameTest(skyAccess = true)
 	public void siteFinderOnlyAcceptsFreeSpaceOnSolidGround(GameTestHelper helper) {
 		ServerLevel level = helper.getLevel();
-		buildFloor(helper);
+		GameTestSupport.buildFloor(helper);
 		BlockPos origin = helper.absolutePos(new BlockPos(3, 1, 3));
 
 		for (int i = 0; i < 20; i++) {
@@ -175,13 +165,11 @@ public class WildfrontGameTest {
 	@GameTest(skyAccess = true)
 	public void mysteriousDiscoveryPlacesACacheNearThePlayer(GameTestHelper helper) {
 		ServerLevel level = helper.getLevel();
-		buildFloor(helper);
+		GameTestSupport.buildFloor(helper);
 		BlockPos origin = helper.absolutePos(new BlockPos(3, 1, 3));
-		ServerPlayer player = helper.makeMockServerPlayerInLevel();
+		ServerPlayer player = GameTestSupport.addPlayer(helper, GameType.SURVIVAL, 3, 1, 3);
 
 		try {
-			player.snapTo(origin.getX() + 0.5, origin.getY(), origin.getZ() + 0.5);
-
 			WorldEvent event = WildfrontEvents.MYSTERIOUS_DISCOVERY;
 			EventConfig eventConfig = event.defaultConfig();
 			WildfrontConfig config = new WildfrontConfig(true, 10, 120, 48, Map.of(event.id(), eventConfig), new DiscoveryConfig(1, 3, 60, 64));
@@ -203,7 +191,7 @@ public class WildfrontGameTest {
 			DiscoveryManager.tick(level, now);
 			helper.assertTrue(isTracked(level, placed.get(0).pos()), "a fresh cache should stay tracked");
 		} finally {
-			level.getServer().getPlayerList().remove(player);
+			GameTestSupport.remove(helper, player);
 		}
 
 		helper.succeed();
@@ -211,7 +199,7 @@ public class WildfrontGameTest {
 
 	@GameTest
 	public void cooldownsAreStoredOnThePlayer(GameTestHelper helper) {
-		ServerPlayer player = helper.makeMockServerPlayerInLevel();
+		ServerPlayer player = GameTestSupport.addPlayer(helper, GameType.SURVIVAL, 3, 1, 3);
 
 		try {
 			PlayerCooldowns cooldowns = new PlayerCooldowns(player);
@@ -225,7 +213,7 @@ public class WildfrontGameTest {
 			cooldowns.clear();
 			helper.assertTrue(cooldowns.lastTrigger("some_event").isEmpty(), "cleared cooldowns should be gone");
 		} finally {
-			helper.getLevel().getServer().getPlayerList().remove(player);
+			GameTestSupport.remove(helper, player);
 		}
 
 		helper.succeed();

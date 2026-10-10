@@ -7,7 +7,11 @@
 	"entrypoints": {
 		"fabric-gametest": [
 			"dev.wildfront.gametest.WildfrontGameTest",
-			"dev.wildfront.gametest.AbandonedCampGameTest"
+			"dev.wildfront.gametest.AbandonedCampGameTest",
+			"dev.wildfront.gametest.EventSystemGameTest"
+		],
+		"fabric-client-gametest": [
+			"dev.wildfront.gametest.client.WildfrontClientGameTest"
 		]
 	},
 	"depends": {

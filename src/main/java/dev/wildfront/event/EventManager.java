@@ -37,17 +37,23 @@ public final class EventManager {
 	private void onEndTick(MinecraftServer server) {
 		WildfrontConfig config = ConfigManager.get();
 
+		// The only work done on ordinary ticks: one config read and one remainder.
+		if (server.getTickCount() % (config.checkIntervalSeconds() * EventSettings.TICKS_PER_SECOND) != 0) {
+			return;
+		}
+
+		checkPlayers(server, server.overworld().getGameTime(), config);
+	}
+
+	/**
+	 * Runs one check: gives every eligible online player the chance to have an event triggered.
+	 *
+	 * @param now overworld game time
+	 */
+	public void checkPlayers(MinecraftServer server, long now, WildfrontConfig config) {
 		if (!config.eventsEnabled()) {
 			return;
 		}
-
-		int interval = config.checkIntervalSeconds() * EventSettings.TICKS_PER_SECOND;
-
-		if (server.getTickCount() % interval != 0) {
-			return;
-		}
-
-		long now = server.overworld().getGameTime();
 
 		for (ServerPlayer player : server.getPlayerList().getPlayers()) {
 			evaluate(player, now, config);

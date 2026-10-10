@@ -4,9 +4,27 @@ A Minecraft Java Edition mod (Fabric) about dynamic exploration: rare world even
 discoveries and abandoned places that make the world feel unpredictable and alive, without
 replacing vanilla survival.
 
-**Status:** Milestone 5 — first structure. Besides the *Mysterious Discovery* event, which makes a
-forgotten cache appear near a player who is out exploring, newly generated terrain now contains
-*abandoned camps* with supplies left behind.
+**Version 0.1.0** for Minecraft 26.3 (Fabric). It adds:
+
+- **Mysterious Discovery**, a dynamic event: a forgotten cache appears near a player who is out
+  exploring, the player is told which way to look, and whoever opens it is rewarded.
+- **Abandoned camps**, a small structure with supplies left behind, in newly generated terrain.
+- A configurable, server-side event system both are built on.
+
+| Abandoned camp | Forgotten cache |
+|----------------|-----------------|
+| ![An abandoned camp on a grassy hillside](docs/images/abandoned_camp.png) | ![A forgotten cache marked by a column of particles](docs/images/forgotten_cache.png) |
+
+See [CHANGELOG.md](CHANGELOG.md) for the full list of features and known limitations.
+
+## Installing
+
+1. Install [Fabric Loader](https://fabricmc.net/use/) 0.19.5 or newer for Minecraft 26.3.
+2. Put `wildfront-0.1.0+mc26.3.jar` and [Fabric API](https://modrinth.com/mod/fabric-api) in the
+   `mods` folder.
+
+All gameplay runs on the server. In multiplayer the mod is only required on the server; players
+without it see the English texts. Java 25 is required, as for Minecraft 26.3 itself.
 
 ## Versions
 
@@ -41,21 +59,33 @@ The first build downloads Gradle, Minecraft and all dependencies, which takes se
 .\gradlew.bat build
 ```
 
-Runs the unit tests and the in-world game tests, and writes the mod jar to
-`build/libs/wildfront-<version>.jar`.
+Runs the unit tests and the headless in-world game tests, and writes the release jar to
+`build/libs/wildfront-<version>.jar` (plus a `-sources` jar). The version is set in
+[gradle.properties](gradle.properties).
 
-To run only one kind of test:
+## Tests
 
-```
-.\gradlew.bat test
-.\gradlew.bat runGameTest
-```
+| Command | What it runs | Part of `build` |
+|---------|--------------|-----------------|
+| `.\gradlew.bat test` | Unit tests for logic that needs no world: scheduling, cooldowns, config validation, directions | yes |
+| `.\gradlew.bat runGameTest` | Game tests on a headless server: caches, loot, expiry, site selection, the automatic event check with several players, commands, camp data and generation, and a timing check of the timer-driven code. Ends with `All N required tests passed` | yes |
+| `.\gradlew.bat runClientGameTest` | Opens a real game window, creates a normally generated world, finds a naturally generated camp, triggers the event by command and waits for it to trigger on its own. Writes screenshots to `build/run/clientGameTest/screenshots` | no |
+| `.\gradlew.bat runProductionClient` | Starts a non-development client with the release jar, as a player would run it. Close the window to end it | no |
 
-`test` covers logic that needs no world (scheduling, cooldowns, config validation, directions).
-`runGameTest` starts a headless test server and checks behavior in a real world: cache placement,
-loot generation, expiry, site selection, data stored on players, and that the abandoned camp's
-world generation data loads and generates the camp. It prints
-`All N required tests passed` at the end.
+### Performance
+
+All gameplay code runs on the server thread and is driven by two timers; nothing scans blocks or
+loads chunks on a timer.
+
+- **Every tick:** two remainder checks and one config read.
+- **Every `checkIntervalSeconds` (default 10 s):** one check per online player. Measured by the
+  game test `timerDrivenCodeIsCheap` on the development machine: about 0.15 microseconds for a
+  player on cooldown (the usual case) and about 0.85 microseconds when every condition is
+  evaluated. A trigger additionally does at most 12 heightmap lookups in loaded chunks.
+- **Every 2 seconds, only while caches exist:** one block entity lookup, one particle packet and
+  sometimes one sound per cache in a loaded chunk; about 1.5 microseconds per cache measured.
+
+For comparison, a server tick has a budget of 50,000 microseconds.
 
 ## Development client
 
@@ -68,7 +98,7 @@ To confirm the mod loaded, look for these lines in the console or in `run/logs/l
 
 ```
 [Wildfront] Registered 1 event(s): [mysterious_discovery]
-[Wildfront] Initialized (version 0.1.0, environment CLIENT)
+[Wildfront] Initialized (version 0.1.0+mc26.3, environment CLIENT)
 [Wildfront] Client initialized
 ```
 
@@ -279,8 +309,19 @@ src/main/resources/    fabric.mod.json, assets, and data (loot tables, world gen
 src/client/java/dev/wildfront/client   client-only code
 src/test/java/         JUnit tests
 src/gametest/java/     in-world game tests, run on a headless server
-tools/                 generator for the binary structure templates
+tools/                 generators for the binary structure template and the icon
+docs/images/           screenshots taken by the client game test
+.github/workflows/     CI: build and tests on every push
 ```
+
+## Releasing
+
+1. Set `version` in [gradle.properties](gradle.properties) and add a section to [CHANGELOG.md](CHANGELOG.md).
+2. `.\gradlew.bat clean build` — unit and game tests must pass.
+3. `.\gradlew.bat runClientGameTest` — must pass; look at the screenshots.
+4. `.\gradlew.bat runProductionClient` — the log must show `[Wildfront] Initialized`; create a world
+   and try `/wildfront event trigger mysterious_discovery` and `/locate structure wildfront:abandoned_camp`.
+5. Publish `build/libs/wildfront-<version>.jar`.
 
 ## License
 

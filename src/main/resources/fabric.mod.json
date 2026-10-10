@@ -8,6 +8,7 @@
 		"Wildfront contributors"
 	],
 	"license": "MIT",
+	"icon": "assets/wildfront/icon.png",
 	"environment": "*",
 	"entrypoints": {
 		"main": [

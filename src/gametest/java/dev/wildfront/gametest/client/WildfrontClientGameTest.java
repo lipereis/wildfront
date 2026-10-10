@@ -12,6 +12,7 @@ import dev.wildfront.discovery.ActiveCache;
 import dev.wildfront.discovery.DiscoveryManager;
 import dev.wildfront.registry.WildfrontLootTables;
 import dev.wildfront.registry.WildfrontStructures;
+import dev.wildfront.worldgen.HeightSpread;
 
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -27,6 +28,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.structure.Structure;
 
 /**
@@ -88,7 +90,11 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 						&& WildfrontLootTables.ABANDONED_CAMP.equals(chest.getLootTable())));
 		check(hasLootChest, "the generated camp should contain its loot chest");
 
-		System.out.println("[WildfrontClientGameTest] natural abandoned camp at " + campfire.toShortString());
+		int offGround = server.computeOnServer(s -> heightAboveGround(s.overworld(), campfire));
+		check(Math.abs(offGround) <= 1, "the camp should stand at ground level, but its campfire is " + offGround + " block(s) off");
+		int spread = server.computeOnServer(s -> terrainSpread(s.overworld(), located));
+		check(spread <= 3, "camps should only generate on roughly level ground, but the terrain around this one varies by " + spread + " blocks");
+		System.out.println("[WildfrontClientGameTest] natural abandoned camp at " + campfire.toShortString() + ", terrain varies by " + spread + " block(s), campfire " + offGround + " block(s) off ground level");
 		lookAt(context, world, player, campfire);
 		takeWorldScreenshot(context, "1_abandoned_camp");
 		server.runCommand("tp " + player + " " + (campfire.getX() + 7.5) + " " + (campfire.getY() + 4) + " " + (campfire.getZ() + 7.5) + " 135 25");
@@ -155,6 +161,31 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 
 			server.runCommand("wildfront reload");
 		}
+	}
+
+	/**
+	 * Difference between the highest and lowest terrain height the generator reports around the
+	 * camp's start, sampled the way the camp's structure type samples it.
+	 */
+	static int terrainSpread(ServerLevel level, BlockPos located) {
+		int[][] offsets = HeightSpread.sampleOffsets(7);
+		int[] heights = new int[offsets.length];
+
+		for (int i = 0; i < offsets.length; i++) {
+			heights[i] = level.getChunkSource().getGenerator().getFirstOccupiedHeight((located.getX() & ~15) + offsets[i][0],
+					(located.getZ() & ~15) + offsets[i][1], Heightmap.Types.WORLD_SURFACE_WG, level, level.getChunkSource().randomState());
+		}
+
+		return HeightSpread.spread(heights);
+	}
+
+	/**
+	 * How far above (positive) or below (negative) the terrain's own ground level the campfire
+	 * stands. A camp sunk into a dip or perched on a mound gives a value away from 0.
+	 */
+	static int heightAboveGround(ServerLevel level, BlockPos campfire) {
+		return campfire.getY() - level.getChunkSource().getGenerator().getFirstFreeHeight(campfire.getX(), campfire.getZ(),
+				Heightmap.Types.WORLD_SURFACE_WG, level, level.getChunkSource().randomState());
 	}
 
 	static BlockPos findCampfire(ServerLevel level, BlockPos near) {

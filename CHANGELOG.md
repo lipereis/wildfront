@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.1 — unreleased
+
+### Fixed
+
+- **Abandoned camps no longer sit in a dip.** Camps were placed one block too low, and the terrain
+  around them was then lowered to match, leaving each camp in a shallow pit, or in a squared notch
+  when on a hillside. They now stand on the surface.
+- **Camps no longer generate on steep ground or in water.** They use a new structure type,
+  `wildfront:flat_ground_jigsaw`, that skips spots where the terrain varies by more than three
+  blocks or where water stands on the ground. Hilly and watery regions therefore have fewer camps.
+
+Both changes affect newly generated chunks only; camps that already exist stay as they are.
+
 ## 0.1.0 — first release
 
 For Minecraft 26.3 with Fabric Loader 0.19.5 or newer and Fabric API. Requires Java 25.

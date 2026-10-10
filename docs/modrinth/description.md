@@ -51,7 +51,7 @@ To see the mod right away: `/wildfront event trigger mysterious_discovery`, and 
 
 - **Server-side gameplay.** On a server, only the server needs the mod; players without it see the messages in English. In singleplayer, install it as usual.
 - **Lightweight.** Nothing scans blocks or loads chunks on a timer. Players are checked once every ten seconds, which takes less than a microsecond each.
-- **Safe to remove.** Caches and camps are vanilla blocks. Removing the mod leaves them in place and nothing else behind.
+- **Vanilla blocks only.** Caches and camps are made of vanilla blocks, which stay in the world if the mod is removed.
 - Requires [Fabric API](https://modrinth.com/mod/fabric-api).
 
 ## Known limitations

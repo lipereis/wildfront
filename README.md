@@ -218,22 +218,35 @@ string, leather, a worn tool or a compass or map, sometimes emeralds, gold, a sa
 book).
 
 - Generates on the surface in forests, taigas, savannas, plains, sunflower plains, meadows and
-  snowy plains, roughly one every 380 blocks in those biomes (spacing 24 chunks, separation 10).
+  snowy plains. Candidate spots are about 380 blocks apart in those biomes (spacing 24 chunks,
+  separation 10); a camp only appears at a candidate where the ground is dry and roughly level,
+  so hilly or watery regions have fewer.
 - **Only in chunks generated after the mod was added.** Existing terrain is never changed.
 - Find one with `/locate structure wildfront:abandoned_camp`; build one anywhere with
   `/place structure wildfront:abandoned_camp`.
-- It is entirely data-driven, so a data pack can change or disable it:
+- Its definition is data, so a data pack can change or disable it:
 
 | File under `data/wildfront/` | Controls |
 |------------------------------|----------|
-| `worldgen/structure_set/abandoned_camps.json` | How often camps generate |
+| `worldgen/structure_set/abandoned_camps.json` | How far apart candidate spots are |
 | `tags/worldgen/biome/has_structure/abandoned_camp.json` | Which biomes; an empty `values` list with `"replace": true` disables camps |
-| `worldgen/structure/abandoned_camp.json` | Height and terrain adaptation |
+| `worldgen/structure/abandoned_camp.json` | Height, terrain adaptation, and how level the ground must be |
 | `structure/abandoned_camp/camp.nbt` | The blocks |
 | `loot_table/structure/abandoned_camp.json` | The chest's loot |
 
-Removing the mod from a world that contains camps is safe: the blocks are vanilla and stay, and the
-game only logs that the structure is unknown.
+The camp uses the structure type `wildfront:flat_ground_jigsaw`, which the mod adds. It accepts
+every setting of `minecraft:jigsaw` plus two of its own:
+
+| Setting | Camp | Meaning |
+|---------|------|---------|
+| `check_radius` | `7` | Half the side of the square around the structure's start whose terrain is sampled, at nine points |
+| `max_height_difference` | `3` | Largest allowed difference between the highest and lowest sampled surface |
+
+A spot is also rejected if water stands on the ground at any sampled point. A rejected spot simply
+gets no structure; nothing is moved elsewhere. Data packs may use the type for their own structures.
+
+The blocks of a camp are vanilla and stay if the mod is removed. What the game then reports about
+the structure it no longer knows has not been tested.
 
 ### Editing the camp
 
@@ -309,7 +322,8 @@ src/main/java/dev/wildfront/
   event/trigger/       configurable trigger conditions (distance, time of day, weather)
   event/type/          concrete events
   discovery/           forgotten cache: site selection, placement, tracking, expiry
-  registry/            central registration of events, data attachments and loot table keys
+  registry/            central registration of events, data attachments, loot table keys and structure types
+  worldgen/            structure type that only generates on dry, level ground
   config/              config file loading and validation
   command/             /wildfront commands
 src/main/resources/    fabric.mod.json, assets, and data (loot tables, world generation, structure templates)

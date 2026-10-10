@@ -6,6 +6,7 @@ import dev.wildfront.discovery.DiscoveryManager;
 import dev.wildfront.event.EventManager;
 import dev.wildfront.registry.WildfrontAttachments;
 import dev.wildfront.registry.WildfrontEvents;
+import dev.wildfront.registry.WildfrontStructures;
 
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
@@ -30,6 +31,7 @@ public class Wildfront implements ModInitializer {
 
 		ConfigManager.reload();
 		WildfrontAttachments.init();
+		WildfrontStructures.init();
 		WildfrontEvents.init();
 		EVENTS.register();
 		DiscoveryManager.register();

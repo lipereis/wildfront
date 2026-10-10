@@ -44,6 +44,7 @@ import net.minecraft.world.level.levelgen.structure.Structure;
 public class WildfrontDedicatedServerGameTest implements FabricClientGameTest {
 	private static final String EVENT = WildfrontEvents.MYSTERIOUS_DISCOVERY.id();
 	private static final int SEARCH_RADIUS_CHUNKS = 100;
+	private static final int CLIENT_SYNC_TIMEOUT_TICKS = 600;
 
 	@Override
 	public void runTest(ClientGameTestContext context) {
@@ -109,9 +110,8 @@ public class WildfrontDedicatedServerGameTest implements FabricClientGameTest {
 				"the player's cooldown should be stored on the server");
 
 		// The client must see the block the server placed.
-		connection.waitForClientboundPackets();
-		check(context.computeOnClient(client -> client.level.getBlockState(cache).is(Blocks.BARREL)),
-				"the connected client should see the cache as a barrel");
+		// Fails with a timeout if the client never sees the barrel.
+		context.waitFor(client -> client.level != null && client.level.getBlockState(cache).is(Blocks.BARREL), CLIENT_SYNC_TIMEOUT_TICKS);
 		context.takeScreenshot("5_dedicated_server_event");
 
 		// What opening the barrel does; the server's own timer must then notice it was found.
@@ -196,13 +196,20 @@ public class WildfrontDedicatedServerGameTest implements FabricClientGameTest {
 				.anyMatch(pos -> s.overworld().getBlockEntity(pos) instanceof ChestBlockEntity chest
 						&& WildfrontLootTables.ABANDONED_CAMP.equals(chest.getLootTable()))),
 				"the generated camp should contain its loot chest");
-		System.out.println("[WildfrontDedicatedServerGameTest] natural abandoned camp at " + campfire.toShortString());
+		int offGround = server.computeOnServer(s -> WildfrontClientGameTest.heightAboveGround(s.overworld(), campfire));
+		check(Math.abs(offGround) <= 1, "the camp should stand at ground level, but its campfire is " + offGround + " block(s) off");
+		int spread = server.computeOnServer(s -> WildfrontClientGameTest.terrainSpread(s.overworld(), located));
+		check(spread <= 3, "camps should only generate on roughly level ground, but the terrain around this one varies by " + spread + " blocks");
+		System.out.println("[WildfrontDedicatedServerGameTest] natural abandoned camp at " + campfire.toShortString() + ", terrain varies by " + spread + " block(s), campfire " + offGround + " block(s) off ground level");
 
 		server.runCommand("tp " + player + " " + (campfire.getX() - 6.5) + " " + (campfire.getY() + 8) + " " + (campfire.getZ() - 6.5) + " -45 40");
 		connection.waitForChunksRender();
 		context.waitTicks(20);
-		check(context.computeOnClient(client -> client.level.getBlockState(campfire).is(Blocks.CAMPFIRE)),
-				"the connected client should see the camp's campfire");
+		// The camp can be far from spawn; its chunks reach the client over the network a little
+		// after the teleport. Fails with a timeout if the client never sees the campfire.
+		context.waitFor(client -> client.level != null && client.level.getBlockState(campfire).is(Blocks.CAMPFIRE), CLIENT_SYNC_TIMEOUT_TICKS);
+		connection.waitForChunksRender();
+		context.waitTicks(40);
 		context.takeScreenshot("6_dedicated_server_camp");
 	}
 

@@ -16,6 +16,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CampfireBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 
@@ -115,6 +116,12 @@ public class AbandonedCampGameTest {
 		helper.assertTrue(above.isAir() || above.is(Blocks.BARRIER) || above.is(Blocks.TEST_INSTANCE_BLOCK),
 				"the camp should not be buried, but " + above.getBlock() + " is above its campfire");
 		helper.assertTrue(chest.getY() == campfire.getY(), "chest and campfire should stand on the same level");
+
+		// The template's bottom layer must replace the top block of the terrain. One block lower
+		// and the whole camp sits in a dip that the terrain adaptation then digs around it.
+		int groundLevel = level.getChunkSource().getGenerator().getFirstFreeHeight(campfire.getX(), campfire.getZ(),
+				Heightmap.Types.WORLD_SURFACE_WG, level, level.getChunkSource().randomState());
+		helper.assertTrue(campfire.getY() == groundLevel, "the campfire should stand at ground level " + groundLevel + " but is at " + campfire.getY());
 		helper.succeed();
 	}
 }

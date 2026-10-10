@@ -14,6 +14,8 @@ For Minecraft 26.3 with Fabric Loader 0.19.5 or newer and Fabric API. Requires J
 - **Mysterious Discovery event.** A forgotten cache appears on the surface near an exploring
   player, who is told which direction to look. The cache is marked by a column of particles and a
   chime, contains supplies and one valuable item, and disappears if nobody opens it in time.
+  Grass or mycelium that died under a cache is put back when the cache is removed, so no bare
+  patch marks the spot.
 - **Abandoned camp structure.** A small deserted traveller's camp with a chest of travel supplies,
   generating in forests, taigas, savannas and plains. Only newly generated chunks are affected.
 - **Configuration** in `config/wildfront.json`: event frequency, cooldowns, conditions, cache

@@ -20,8 +20,10 @@ See [CHANGELOG.md](CHANGELOG.md) for the full list of features and known limitat
 ## Installing
 
 1. Install [Fabric Loader](https://fabricmc.net/use/) 0.19.5 or newer for Minecraft 26.3.
-2. Put `wildfront-0.1.0+mc26.3.jar` and [Fabric API](https://modrinth.com/mod/fabric-api) in the
-   `mods` folder.
+2. Download `wildfront-0.1.0+mc26.3.jar` from the
+   [latest release](https://github.com/lipereis/wildfront/releases/latest) (not the `-sources` file).
+3. Put it and [Fabric API](https://modrinth.com/mod/fabric-api) in the `mods` folder of the game
+   directory that your Fabric installation uses.
 
 All gameplay runs on the server. In multiplayer the mod is only required on the server; players
 without it see the English texts. Java 25 is required, as for Minecraft 26.3 itself.
@@ -316,12 +318,22 @@ docs/images/           screenshots taken by the client game test
 
 ## Releasing
 
-1. Set `version` in [gradle.properties](gradle.properties) and add a section to [CHANGELOG.md](CHANGELOG.md).
+1. Set `version` in [gradle.properties](gradle.properties) and add a section headed
+   `## <version without +mc...>` to [CHANGELOG.md](CHANGELOG.md).
 2. `.\gradlew.bat clean build` — unit and game tests must pass.
 3. `.\gradlew.bat runClientGameTest` — must pass; look at the screenshots.
 4. `.\gradlew.bat runProductionClient` — the log must show `[Wildfront] Initialized`; create a world
    and try `/wildfront event trigger mysterious_discovery` and `/locate structure wildfront:abandoned_camp`.
-5. Publish `build/libs/wildfront-<version>.jar`.
+5. Commit, push and wait for the build workflow to pass. Then tag and push the tag:
+
+   ```
+   git tag v0.1.0
+   git push origin v0.1.0
+   ```
+
+   The release workflow builds the tagged commit, runs the tests, and publishes a GitHub release
+   with the jar and that version's changelog section. It refuses a tag that does not match
+   `version`.
 
 ## License
 

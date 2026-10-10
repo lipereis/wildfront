@@ -2,6 +2,7 @@ package dev.wildfront.event;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
 
 import dev.wildfront.Wildfront;
@@ -68,11 +69,19 @@ public final class EventManager {
 
 		for (WorldEvent event : WildfrontEvents.all()) {
 			EventConfig eventConfig = config.event(event.id());
-			EventContext context = new EventContext(player, player.level(), now, eventConfig, List.of(player));
+			EventContext context = new EventContext(player, player.level(), now, eventConfig, config);
+			WorldEvent.Plan[] plan = new WorldEvent.Plan[1];
 
 			Decision decision = scheduler.attempt(event.id(), EventSettings.of(eventConfig), globalCooldown, cooldowns, now,
-					() -> TriggerCondition.allMet(TriggerConditions.fromConfig(eventConfig), context) && event.canTrigger(context),
-					() -> fire(event, player, now, config));
+					() -> {
+						if (!TriggerCondition.allMet(TriggerConditions.fromConfig(eventConfig), context) || !event.canTrigger(context)) {
+							return false;
+						}
+
+						plan[0] = event.plan(context).orElse(null);
+						return plan[0] != null;
+					},
+					() -> fire(event, plan[0], player, now, config));
 
 			// At most one event per player per check keeps events from stacking on top of each other.
 			if (decision == Decision.TRIGGERED) {
@@ -84,28 +93,38 @@ public final class EventManager {
 	/**
 	 * Triggers an event for a player regardless of cooldowns, chance and conditions, and starts the cooldowns.
 	 *
-	 * @return everyone who experienced the event: the player plus nearby players who shared it
+	 * @return everyone who experienced the event: the player plus nearby players who shared it;
+	 *         empty if the event could not happen where the player is, in which case nothing changed
 	 */
 	public List<ServerPlayer> forceTrigger(WorldEvent event, ServerPlayer player) {
+		WildfrontConfig config = ConfigManager.get();
 		long now = player.level().getServer().overworld().getGameTime();
+		EventContext context = new EventContext(player, player.level(), now, config.event(event.id()), config);
+		Optional<WorldEvent.Plan> plan = event.plan(context);
+
+		if (plan.isEmpty()) {
+			return List.of();
+		}
+
 		List<ServerPlayer> participants = new ArrayList<>();
 		scheduler.force(event.id(), new PlayerCooldowns(player), now,
-				() -> participants.addAll(fire(event, player, now, ConfigManager.get())));
+				() -> participants.addAll(fire(event, plan.get(), player, now, config)));
 		return participants;
 	}
 
 	/**
-	 * @return what currently keeps the event from triggering for the player, apart from cooldowns
-	 *         and chance; empty if nothing does
+	 * @return what currently keeps the event from triggering for the player, apart from cooldowns,
+	 *         chance and finding a place for it; empty if nothing does
 	 */
 	public List<String> unmetConditions(WorldEvent event, ServerPlayer player) {
 		if (!isEligible(player)) {
 			return List.of(NOT_ELIGIBLE);
 		}
 
-		EventConfig eventConfig = ConfigManager.get().event(event.id());
+		WildfrontConfig config = ConfigManager.get();
+		EventConfig eventConfig = config.event(event.id());
 		long now = player.level().getServer().overworld().getGameTime();
-		EventContext context = new EventContext(player, player.level(), now, eventConfig, List.of(player));
+		EventContext context = new EventContext(player, player.level(), now, eventConfig, config);
 		List<String> unmet = new ArrayList<>(TriggerCondition.unmet(TriggerConditions.fromConfig(eventConfig), context));
 
 		if (!event.canTrigger(context)) {
@@ -120,7 +139,7 @@ public final class EventManager {
 	 * player's cooldowns are already recorded by the scheduler; witnesses get theirs here, before
 	 * the event runs, so one occurrence can never lead to a second one for somebody standing next to it.
 	 */
-	private List<ServerPlayer> fire(WorldEvent event, ServerPlayer player, long now, WildfrontConfig config) {
+	private List<ServerPlayer> fire(WorldEvent event, WorldEvent.Plan plan, ServerPlayer player, long now, WildfrontConfig config) {
 		List<ServerPlayer> participants = participants(player, config.shareRadius());
 
 		for (ServerPlayer participant : participants) {
@@ -129,11 +148,10 @@ public final class EventManager {
 			}
 		}
 
-		EventContext context = new EventContext(player, player.level(), now, config.event(event.id()), participants);
 		String names = participants.stream().map(participant -> participant.getGameProfile().name()).toList().toString();
 
 		try {
-			event.trigger(context);
+			plan.run(participants);
 			Wildfront.LOGGER.info("[Wildfront] Event '{}' triggered for {} at {} (game time {})",
 					event.id(), names, player.blockPosition().toShortString(), now);
 		} catch (RuntimeException e) {

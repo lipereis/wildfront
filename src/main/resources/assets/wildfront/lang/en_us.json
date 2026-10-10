@@ -1,4 +1,13 @@
 {
-	"event.wildfront.mysterious_discovery.message": "You sense that something unusual has happened nearby...",
-	"event.wildfront.mysterious_discovery.overlay": "Mysterious Discovery"
+	"event.wildfront.mysterious_discovery.message": "You sense that something unusual has appeared to the %s...",
+	"event.wildfront.mysterious_discovery.overlay": "Mysterious Discovery",
+	"event.wildfront.mysterious_discovery.found": "You uncovered a forgotten cache.",
+	"direction.wildfront.north": "north",
+	"direction.wildfront.north_east": "north-east",
+	"direction.wildfront.east": "east",
+	"direction.wildfront.south_east": "south-east",
+	"direction.wildfront.south": "south",
+	"direction.wildfront.south_west": "south-west",
+	"direction.wildfront.west": "west",
+	"direction.wildfront.north_west": "north-west"
 }

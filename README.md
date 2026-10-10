@@ -4,9 +4,8 @@ A Minecraft Java Edition mod (Fabric) about dynamic exploration: rare world even
 discoveries and abandoned places that make the world feel unpredictable and alive, without
 replacing vanilla survival.
 
-**Status:** Milestone 3 — dynamic event system with configurable triggers and cooldowns. One event
-exists, *Mysterious Discovery*, which notifies players who are out exploring that something unusual
-happened nearby.
+**Status:** Milestone 4 — first complete encounter. *Mysterious Discovery* makes a forgotten cache
+appear near a player who is out exploring, tells them which way to look, and rewards whoever opens it.
 
 ## Versions
 
@@ -41,13 +40,20 @@ The first build downloads Gradle, Minecraft and all dependencies, which takes se
 .\gradlew.bat build
 ```
 
-Runs the unit tests and writes the mod jar to `build/libs/wildfront-<version>.jar`.
+Runs the unit tests and the in-world game tests, and writes the mod jar to
+`build/libs/wildfront-<version>.jar`.
 
-To run only the tests:
+To run only one kind of test:
 
 ```
 .\gradlew.bat test
+.\gradlew.bat runGameTest
 ```
+
+`test` covers logic that needs no world (scheduling, cooldowns, config validation, directions).
+`runGameTest` starts a headless test server and checks behavior in a real world: cache placement,
+loot generation, expiry, site selection and data stored on players. It prints
+`All N required tests passed` at the end.
 
 ## Development client
 
@@ -87,6 +93,12 @@ start. Apply edits with `/wildfront reload` or by restarting.
       "timeOfDay": "any",
       "weather": "any"
     }
+  },
+  "discovery": {
+    "minDistance": 24,
+    "maxDistance": 48,
+    "lifetimeSeconds": 600,
+    "maxActive": 8
   }
 }
 ```
@@ -112,6 +124,15 @@ for `mysterious_discovery`):
 | `timeOfDay` | `"any"` | `any`, `day`, `night` | Night is 13000 – 23000 on the day clock |
 | `weather` | `"any"` | `any`, `clear`, `rain`, `thunder` | `rain` includes thunderstorms; biomes without rain are not considered |
 
+Settings of the forgotten cache under `discovery`:
+
+| Key | Default | Range | Meaning |
+|-----|---------|-------|---------|
+| `minDistance` | `24` | 8 – 128 | Closest the cache appears to the triggering player, in blocks |
+| `maxDistance` | `48` | 8 – 128 | Furthest the cache appears; must not be smaller than `minDistance` |
+| `lifetimeSeconds` | `600` | 30 – 86400 | How long an unopened cache stays before it is removed |
+| `maxActive` | `8` | 1 – 64 | How many caches may be waiting to be found at once on the server |
+
 A missing, mistyped or out-of-range value is replaced by its default and reported in the log and by
 `/wildfront reload`. A file that is not valid JSON is left untouched and defaults are used for
 everything. Config files from Milestone 2 used a `mysteriousDiscovery` section; it is no longer
@@ -128,7 +149,27 @@ Discovery additionally requires the overworld.
 One occurrence is shared: eligible players within `shareRadius` blocks of the triggering player
 receive the same event and start the same cooldowns, so a group travelling together gets one event,
 not one each. At most one event triggers per player per check. Cooldowns are stored per player and
-survive death, relogging and restarts.
+survive death, relogging and restarts. If an event cannot happen where the player is (for example
+no suitable place nearby), no cooldown starts and it is tried again on a later check.
+
+### Mysterious Discovery
+
+1. A forgotten cache (a barrel) appears on the surface `minDistance` to `maxDistance` blocks from
+   the player. It only ever replaces air or plants, stands on solid ground, never in water or
+   lava, is at most 24 blocks above or below the player, and only loaded chunks are considered.
+2. Every participant gets a chat message naming the direction, for example
+   *"You sense that something unusual has appeared to the north-east..."*.
+3. Up close the cache is marked by a column of white particles (visible within about 32 blocks)
+   and a soft chime every 6 seconds.
+4. Opening the cache generates its loot: a few stacks of supplies (iron, gold, emeralds, bread,
+   arrows, experience bottles, ender pearls) and one valuable (diamonds, an enchanted book, a name
+   tag, a saddle, a spyglass or a golden apple). The barrel stays and belongs to the player.
+5. A cache nobody opened is removed after `lifetimeSeconds` without dropping anything. Breaking an
+   unopened cache drops its loot, as with any loot container.
+
+The loot is defined in `data/wildfront/loot_table/discovery/forgotten_cache.json` and can be
+replaced by a data pack. Caches are tracked in the world save, so they are still cleaned up after a
+restart; a cache in an unloaded chunk is handled when its chunk is loaded again.
 
 ## Commands
 
@@ -144,9 +185,14 @@ All require operator permission (game master level; cheats enabled in singleplay
 ## Testing the event in a world
 
 1. `.\gradlew.bat runClient`, create a **survival** world with **cheats allowed**.
-2. `/wildfront event trigger mysterious_discovery` — a purple chat message and an action-bar
-   message appear, and the log shows `Event 'mysterious_discovery' triggered for [...]`.
-3. To see automatic triggering quickly, replace the content of `run/config/wildfront.json` with
+2. `/wildfront event trigger mysterious_discovery` — a purple chat message names a direction and
+   the log shows `Forgotten cache placed at X, Y, Z`. Walk that way: within about 32 blocks a column
+   of white particles and a chime mark a barrel. Open it: it contains loot, and the action bar
+   shows *You uncovered a forgotten cache.*
+3. Expiry: set `"discovery": { "lifetimeSeconds": 30 }` in `run/config/wildfront.json`, run
+   `/wildfront reload` and `/wildfront event reset`, trigger again and do not open the cache. After
+   30 seconds it disappears with a puff and the log shows `expired unopened and was removed`.
+4. To see automatic triggering quickly, replace the content of `run/config/wildfront.json` with
    this and run `/wildfront reload`:
 
    ```json
@@ -155,17 +201,18 @@ All require operator permission (game master level; cheats enabled in singleplay
      "globalCooldownSeconds": 0,
      "events": {
        "mysterious_discovery": { "cooldownSeconds": 15, "triggerChance": 1, "minDistanceFromSpawn": 0 }
-     }
+     },
+     "discovery": { "lifetimeSeconds": 30 }
    }
    ```
 
-   The event then triggers once every 15 seconds. `/wildfront event list` shows the countdown.
-4. Conditions: add `"timeOfDay": "night"` to the event, reload, then `/time set day` (no triggers,
+   A cache then appears every 15 seconds. `/wildfront event list` shows the countdown.
+5. Conditions: add `"timeOfDay": "night"` to the event, reload, then `/time set day` (no triggers,
    list shows `waiting for: time of day NIGHT`) and `/time set night` (triggers resume). The same
    works with `"weather": "thunder"` and `/weather thunder`.
-5. Global cooldown: set `"globalCooldownSeconds": 40` and reload; triggers are now 40 seconds apart
+6. Global cooldown: set `"globalCooldownSeconds": 40` and reload; triggers are now 40 seconds apart
    although the event cooldown is 15.
-6. Restore the defaults afterwards (delete the file and run `/wildfront reload`).
+7. Restore the defaults afterwards (delete the file and run `/wildfront reload`).
 
 ## Project layout
 
@@ -175,12 +222,14 @@ src/main/java/dev/wildfront/
   event/               WorldEvent (definition), EventScheduler (rules), EventManager (server hook)
   event/trigger/       configurable trigger conditions (distance, time of day, weather)
   event/type/          concrete events
-  registry/            central registration of events and data attachments
+  discovery/           forgotten cache: site selection, placement, tracking, expiry
+  registry/            central registration of events, data attachments and loot table keys
   config/              config file loading and validation
   command/             /wildfront commands
 src/main/resources/    fabric.mod.json, data and assets
 src/client/java/dev/wildfront/client   client-only code
 src/test/java/         JUnit tests
+src/gametest/java/     in-world game tests, run on a headless server
 ```
 
 ## License

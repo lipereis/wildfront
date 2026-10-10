@@ -1,0 +1,15 @@
+{
+	"schemaVersion": 1,
+	"id": "wildfront-test",
+	"version": "1.0.0",
+	"name": "Wildfront Game Tests",
+	"environment": "*",
+	"entrypoints": {
+		"fabric-gametest": [
+			"dev.wildfront.gametest.WildfrontGameTest"
+		]
+	},
+	"depends": {
+		"wildfront": "*"
+	}
+}

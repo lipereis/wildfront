@@ -119,7 +119,15 @@ public final class WildfrontCommands {
 		String id = StringArgumentType.getString(context, "event");
 		WorldEvent event = WildfrontEvents.get(id).orElseThrow(() -> UNKNOWN_EVENT.create(id));
 
-		int witnesses = Wildfront.EVENTS.forceTrigger(event, target).size() - 1;
+		List<ServerPlayer> participants = Wildfront.EVENTS.forceTrigger(event, target);
+
+		if (participants.isEmpty()) {
+			context.getSource().sendFailure(Component.literal("'" + id + "' cannot happen where ").append(target.getDisplayName())
+					.append(" is right now (wrong dimension, no suitable place nearby, or too many active already). Nothing was changed."));
+			return 0;
+		}
+
+		int witnesses = participants.size() - 1;
 		context.getSource().sendSuccess(() -> Component.literal("Triggered '" + id + "' for ").append(target.getDisplayName())
 				.append(witnesses > 0 ? " and " + witnesses + " nearby player(s)" : ""), true);
 		return 1;

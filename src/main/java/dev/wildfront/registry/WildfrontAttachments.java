@@ -1,10 +1,12 @@
 package dev.wildfront.registry;
 
+import java.util.List;
 import java.util.Map;
 
 import com.mojang.serialization.Codec;
 
 import dev.wildfront.Wildfront;
+import dev.wildfront.discovery.ActiveCache;
 
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
@@ -16,6 +18,12 @@ public final class WildfrontAttachments {
 	public static final AttachmentType<Map<String, Long>> EVENT_COOLDOWNS = AttachmentRegistry.<Map<String, Long>>create(
 			Wildfront.id("event_cooldowns"),
 			builder -> builder.persistent(Codec.unboundedMap(Codec.STRING, Codec.LONG)).copyOnDeath());
+
+	/**
+	 * Per level: forgotten caches that were placed and not yet found, destroyed or expired.
+	 */
+	public static final AttachmentType<List<ActiveCache>> ACTIVE_CACHES = AttachmentRegistry.createPersistent(
+			Wildfront.id("active_caches"), ActiveCache.CODEC.listOf());
 
 	private WildfrontAttachments() {
 	}

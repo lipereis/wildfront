@@ -23,7 +23,14 @@ public final class ConfigParser {
 	static final int MAX_DISTANCE = 1_000_000;
 	static final int MAX_SHARE_RADIUS = 512;
 
+	static final int MIN_CACHE_DISTANCE = 8;
+	static final int MAX_CACHE_DISTANCE = 128;
+	static final int MIN_LIFETIME_SECONDS = 30;
+	static final int MAX_LIFETIME_SECONDS = 24 * 3600;
+	static final int MAX_ACTIVE_CACHES = 64;
+
 	private static final String EVENTS = "events";
+	private static final String DISCOVERY = "discovery";
 	private static final String LEGACY_MYSTERIOUS_DISCOVERY = "mysteriousDiscovery";
 
 	private ConfigParser() {
@@ -56,7 +63,26 @@ public final class ConfigParser {
 				readInt(root, "", "checkIntervalSeconds", WildfrontConfig.DEFAULT_CHECK_INTERVAL_SECONDS, 1, MAX_CHECK_INTERVAL_SECONDS, warnings),
 				readInt(root, "", "globalCooldownSeconds", WildfrontConfig.DEFAULT_GLOBAL_COOLDOWN_SECONDS, 0, MAX_COOLDOWN_SECONDS, warnings),
 				readInt(root, "", "shareRadius", WildfrontConfig.DEFAULT_SHARE_RADIUS, 0, MAX_SHARE_RADIUS, warnings),
-				events);
+				events,
+				parseDiscovery(readObject(root, "", DISCOVERY, warnings), warnings));
+	}
+
+	private static DiscoveryConfig parseDiscovery(JsonObject json, List<String> warnings) {
+		DiscoveryConfig defaults = DiscoveryConfig.DEFAULT;
+		String path = DISCOVERY + ".";
+		int minDistance = readInt(json, path, "minDistance", defaults.minDistance(), MIN_CACHE_DISTANCE, MAX_CACHE_DISTANCE, warnings);
+		int maxDistance = readInt(json, path, "maxDistance", defaults.maxDistance(), MIN_CACHE_DISTANCE, MAX_CACHE_DISTANCE, warnings);
+
+		if (maxDistance < minDistance) {
+			warnings.add("'" + path + "maxDistance' (" + maxDistance + ") must not be smaller than '" + path + "minDistance' (" + minDistance
+					+ "); using defaults " + defaults.minDistance() + " and " + defaults.maxDistance());
+			minDistance = defaults.minDistance();
+			maxDistance = defaults.maxDistance();
+		}
+
+		return new DiscoveryConfig(minDistance, maxDistance,
+				readInt(json, path, "lifetimeSeconds", defaults.lifetimeSeconds(), MIN_LIFETIME_SECONDS, MAX_LIFETIME_SECONDS, warnings),
+				readInt(json, path, "maxActive", defaults.maxActive(), 1, MAX_ACTIVE_CACHES, warnings));
 	}
 
 	private static EventConfig parseEvent(JsonObject json, String path, EventConfig defaults, List<String> warnings) {
@@ -90,6 +116,13 @@ public final class ConfigParser {
 		root.addProperty("globalCooldownSeconds", config.globalCooldownSeconds());
 		root.addProperty("shareRadius", config.shareRadius());
 		root.add(EVENTS, events);
+
+		JsonObject discovery = new JsonObject();
+		discovery.addProperty("minDistance", config.discovery().minDistance());
+		discovery.addProperty("maxDistance", config.discovery().maxDistance());
+		discovery.addProperty("lifetimeSeconds", config.discovery().lifetimeSeconds());
+		discovery.addProperty("maxActive", config.discovery().maxActive());
+		root.add(DISCOVERY, discovery);
 		return root;
 	}
 

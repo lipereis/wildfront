@@ -2,6 +2,7 @@ package dev.wildfront;
 
 import dev.wildfront.command.WildfrontCommands;
 import dev.wildfront.config.ConfigManager;
+import dev.wildfront.discovery.DiscoveryManager;
 import dev.wildfront.event.EventManager;
 import dev.wildfront.registry.WildfrontAttachments;
 import dev.wildfront.registry.WildfrontEvents;
@@ -31,6 +32,7 @@ public class Wildfront implements ModInitializer {
 		WildfrontAttachments.init();
 		WildfrontEvents.init();
 		EVENTS.register();
+		DiscoveryManager.register();
 		WildfrontCommands.register();
 
 		LOGGER.info("[Wildfront] Initialized (version {}, environment {})",

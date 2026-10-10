@@ -61,6 +61,7 @@ class ConfigParserTest {
 					"checkIntervalSeconds": 2,
 					"globalCooldownSeconds": 0,
 					"shareRadius": 0,
+					"discovery": { "minDistance": 8, "maxDistance": 8, "lifetimeSeconds": 30, "maxActive": 1 },
 					"events": {
 						"discovery": {
 							"enabled": false,
@@ -75,7 +76,7 @@ class ConfigParserTest {
 
 		assertEquals(new WildfrontConfig(false, 2, 0, 0, Map.of(
 				"discovery", new EventConfig(false, 15, 1.0, 0, TimeOfDay.NIGHT, Weather.RAIN),
-				"storm", STORM)), config);
+				"storm", STORM), new DiscoveryConfig(8, 8, 30, 1)), config);
 		assertTrue(warnings.isEmpty());
 	}
 
@@ -201,6 +202,30 @@ class ConfigParserTest {
 		assertEquals(DEFAULT, parse("{\"mysteriousDiscovery\": {\"cooldownSeconds\": 15}}"));
 		assertEquals(1, warnings.size());
 		assertTrue(warnings.get(0).contains("events.mysterious_discovery"));
+	}
+
+	@Test
+	void discoverySectionFallsBackValueByValue() {
+		WildfrontConfig config = parse("""
+				{ "discovery": { "minDistance": 2, "maxDistance": 64, "lifetimeSeconds": "long", "maxActive": 0 } }""");
+
+		assertEquals(new DiscoveryConfig(DiscoveryConfig.DEFAULT.minDistance(), 64, DiscoveryConfig.DEFAULT.lifetimeSeconds(),
+				DiscoveryConfig.DEFAULT.maxActive()), config.discovery());
+		assertEquals(3, warnings.size(), warnings.toString());
+	}
+
+	@Test
+	void maxDistanceBelowMinDistanceResetsBoth() {
+		WildfrontConfig config = parse("{\"discovery\": {\"minDistance\": 60, \"maxDistance\": 20}}");
+
+		assertEquals(DiscoveryConfig.DEFAULT, config.discovery());
+		assertEquals(1, warnings.size(), warnings.toString());
+		assertTrue(warnings.get(0).contains("'discovery.maxDistance'"));
+	}
+
+	@Test
+	void defaultCacheDistancesAreOrdered() {
+		assertTrue(DiscoveryConfig.DEFAULT.minDistance() <= DiscoveryConfig.DEFAULT.maxDistance());
 	}
 
 	@Test

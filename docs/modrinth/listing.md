@@ -47,7 +47,7 @@ Upload in this order; make the first one the featured image.
 |---|---|---|
 | `gallery/1-forgotten-cache.png` | Forgotten cache | A forgotten cache marked by its column of particles. |
 | `gallery/2-abandoned-camp-forest.png` | Abandoned camp in a birch forest | A naturally generated camp: lean-to, bedroll and what the traveller left behind. |
-| `gallery/3-abandoned-camp-hillside.png` | Abandoned camp on a hillside | Fire pit, log seats, crafting table and the supply chest. |
+| `gallery/3-abandoned-camp-plains.png` | Abandoned camp on the plains | Fire pit, log seats, crafting table and the supply chest. |
 
 ## Version
 

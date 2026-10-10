@@ -13,7 +13,7 @@ replacing vanilla survival.
 
 | Abandoned camp | Forgotten cache |
 |----------------|-----------------|
-| ![An abandoned camp on a grassy hillside](docs/images/abandoned_camp.png) | ![A forgotten cache marked by a column of particles](docs/images/forgotten_cache.png) |
+| ![An abandoned camp on the plains](docs/images/abandoned_camp.png) | ![A forgotten cache marked by a column of particles](docs/images/forgotten_cache.png) |
 
 See [CHANGELOG.md](CHANGELOG.md) for the full list of features and known limitations.
 

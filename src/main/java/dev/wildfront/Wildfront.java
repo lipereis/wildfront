@@ -1,5 +1,11 @@
 package dev.wildfront;
 
+import dev.wildfront.command.WildfrontCommands;
+import dev.wildfront.config.ConfigManager;
+import dev.wildfront.event.EventManager;
+import dev.wildfront.registry.WildfrontAttachments;
+import dev.wildfront.registry.WildfrontEvents;
+
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
 
@@ -13,11 +19,19 @@ public class Wildfront implements ModInitializer {
 
 	public static final Logger LOGGER = LoggerFactory.getLogger("Wildfront");
 
+	public static final EventManager EVENTS = new EventManager();
+
 	@Override
 	public void onInitialize() {
 		String version = FabricLoader.getInstance().getModContainer(MOD_ID)
 				.map(container -> container.getMetadata().getVersion().getFriendlyString())
 				.orElse("unknown");
+
+		ConfigManager.reload();
+		WildfrontAttachments.init();
+		WildfrontEvents.init();
+		EVENTS.register();
+		WildfrontCommands.register();
 
 		LOGGER.info("[Wildfront] Initialized (version {}, environment {})",
 				version, FabricLoader.getInstance().getEnvironmentType());

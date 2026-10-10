@@ -1,0 +1,26 @@
+{
+	"schemaVersion": 1,
+	"id": "wildfront",
+	"version": "${version}",
+	"name": "Wildfront",
+	"description": "Dynamic exploration events, mysterious discoveries and abandoned places that make the world feel alive.",
+	"authors": [
+		"Wildfront contributors"
+	],
+	"license": "MIT",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"dev.wildfront.Wildfront"
+		],
+		"client": [
+			"dev.wildfront.client.WildfrontClient"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

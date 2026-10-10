@@ -11,6 +11,7 @@ import net.minecraft.world.level.storage.loot.LootTable;
  */
 public final class WildfrontLootTables {
 	public static final ResourceKey<LootTable> FORGOTTEN_CACHE = ResourceKey.create(Registries.LOOT_TABLE, Wildfront.id("discovery/forgotten_cache"));
+	public static final ResourceKey<LootTable> ABANDONED_CAMP = ResourceKey.create(Registries.LOOT_TABLE, Wildfront.id("structure/abandoned_camp"));
 
 	private WildfrontLootTables() {
 	}

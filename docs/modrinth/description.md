@@ -17,7 +17,7 @@ Somewhere 24 to 48 blocks away in that direction, a **forgotten cache** now stan
 
 ## Abandoned camps
 
-Small, long-deserted traveller's camps generate in forests, taigas, savannas, plains and meadows: a cold fire pit, a collapsed lean-to with a hay bedroll, a crafting table, and a chest of travel supplies such as food, coal, torches, a worn tool, a compass or a map.
+Small, long-deserted traveller's camps generate in forests, taigas, savannas, plains and meadows, on dry and level ground. Each has a cold fire pit and a chest of travel supplies such as food, coal, torches, a worn tool, a compass or a map. Around them you find one of four scenes: a collapsed lean-to, a sagging tent, a broken-down cart with its load still on it, or the corner of a fallen stone hut.
 
 Camps only generate in **newly generated chunks**. Existing terrain is never changed.
 
@@ -56,7 +56,6 @@ To see the mod right away: `/wildfront event trigger mysterious_discovery`, and 
 
 ## Known limitations
 
-- All camps share one layout; only their rotation differs.
 - The weather condition uses the world's weather and does not know about biomes where it never rains.
 - Anyone may open or break a forgotten cache; it is not reserved for the player it appeared for.
 - This is a first release: it has been tested in singleplayer and by automated tests on a headless server, but not yet on a busy multiplayer server or together with large modpacks.

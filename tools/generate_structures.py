@@ -102,15 +102,31 @@ class Template:
         print(f"wrote {path.relative_to(OUTPUT.parents[4])}: {len(self.blocks)} blocks, {len(self.palette)} block states")
 
 
-def abandoned_camp():
-    """A long-deserted traveller's camp: cold fire pit, collapsed lean-to, supplies left behind.
+SIZE = (7, 4, 7)
+LOOT_CHEST = {"id": "minecraft:chest", "LootTable": "wildfront:structure/abandoned_camp"}
+GROUND = {"c": "minecraft:coarse_dirt", "g": "minecraft:gravel", "m": "minecraft:mossy_cobblestone", "s": "minecraft:cobblestone"}
 
-    7 x 4 x 7. Layer y = 0 replaces the top block of the terrain; everything else stands on it.
+
+def new_layout(ground):
+    """Starts a 7 x 4 x 7 camp layout from its ground layer.
+
+    Layer y = 0 replaces the top block of the terrain; everything else stands on it. `ground` is
+    seven rows (north to south) of seven cells (west to east); a space keeps the terrain.
+
+    Every layout must contain one unlit campfire and one chest with the camp loot table: the game
+    tests look for both to find a camp and to check that it generated.
     """
-    camp = Template((7, 4, 7))
+    layout = Template(SIZE)
+    for z, row in enumerate(ground):
+        for x, cell in enumerate(row):
+            if cell != " ":
+                layout.set(x, 0, z, GROUND[cell])
+    return layout
 
-    # Trampled ground: a rough disc around the fire pit, with gravel and moss where it wore through.
-    ground = [
+
+def lean_to():
+    """Cold fire pit with two log seats, a collapsed lean-to with a hay bedroll, supplies left behind."""
+    camp = new_layout([
         "  ccc  ",
         " cgccc ",
         "ccccmcc",
@@ -118,19 +134,13 @@ def abandoned_camp():
         "cmccccc",
         " ccgcc ",
         "  ccc  ",
-    ]
-    names = {"c": "minecraft:coarse_dirt", "g": "minecraft:gravel", "m": "minecraft:mossy_cobblestone"}
-    for z, row in enumerate(ground):
-        for x, cell in enumerate(row):
-            if cell != " ":
-                camp.set(x, 0, z, names[cell])
+    ])
 
-    # Fire pit, long cold, with two logs pulled up as seats.
     camp.set(3, 1, 3, "minecraft:campfire", lit="false")
     camp.set(5, 1, 3, "minecraft:spruce_log", axis="z")
     camp.set(3, 1, 1, "minecraft:spruce_log", axis="x")
 
-    # Lean-to in the south-west corner: four posts, a roof that has partly fallen in, a bedroll of hay.
+    # Lean-to in the south-west corner: four posts and a roof that has partly fallen in.
     for x, z in ((0, 4), (2, 4), (0, 6), (2, 6)):
         camp.set(x, 1, z, "minecraft:spruce_fence")
     for x, z in ((0, 4), (1, 4), (2, 4), (0, 5), (1, 5), (0, 6), (1, 6)):
@@ -138,14 +148,113 @@ def abandoned_camp():
     camp.set(1, 1, 5, "minecraft:hay_block", axis="x")
     camp.set(2, 1, 5, "minecraft:cobweb")
 
-    # What was left behind.
-    camp.set(1, 1, 1, "minecraft:chest", facing="south",
-             nbt={"id": "minecraft:chest", "LootTable": "wildfront:structure/abandoned_camp"})
+    camp.set(1, 1, 1, "minecraft:chest", nbt=LOOT_CHEST, facing="south")
     camp.set(5, 1, 1, "minecraft:crafting_table")
     camp.set(5, 1, 5, "minecraft:skeleton_skull", rotation="6")
 
     camp.write(OUTPUT / "abandoned_camp" / "camp.nbt")
 
 
+def tent():
+    """A sagging wool tent open to the south, a cold fire in front of it, a cauldron and a chest."""
+    camp = new_layout([
+        " cccc  ",
+        "ccccgc ",
+        "cccccc ",
+        "ccmcccc",
+        " cccgcc",
+        "  ccccc",
+        "   ccc ",
+    ])
+
+    # Tent in the north-west: two walls leaning onto a ridge, closed at the back, one panel gone.
+    for z in (0, 1, 2):
+        camp.set(0, 1, z, "minecraft:light_gray_wool")
+        camp.set(1, 2, z, "minecraft:light_gray_wool")
+        if z != 2:
+            camp.set(2, 1, z, "minecraft:light_gray_wool")
+    camp.set(1, 1, 0, "minecraft:light_gray_wool")
+    camp.set(1, 1, 1, "minecraft:hay_block", axis="z")
+    camp.set(2, 1, 2, "minecraft:cobweb")
+
+    camp.set(3, 1, 4, "minecraft:campfire", lit="false")
+    camp.set(5, 1, 4, "minecraft:spruce_log", axis="z")
+    camp.set(4, 1, 1, "minecraft:chest", nbt=LOOT_CHEST, facing="south")
+    camp.set(5, 1, 6, "minecraft:cauldron")
+
+    camp.write(OUTPUT / "abandoned_camp" / "tent.nbt")
+
+
+def cart():
+    """A broken-down cart with its load still on it, and the fire its owner lit beside it."""
+    camp = new_layout([
+        "       ",
+        " ccgcc ",
+        "ccccccc",
+        "cgcccgc",
+        "ccccccc",
+        " cmccc ",
+        "  ccc  ",
+    ])
+
+    # Cart bed on four posts; one board and one post have given way at the east end.
+    for x, z in ((1, 2), (3, 2), (1, 3), (3, 3)):
+        camp.set(x, 1, z, "minecraft:spruce_fence")
+    for x in (1, 2, 3):
+        for z in (2, 3):
+            if (x, z) != (3, 3):
+                camp.set(x, 2, z, "minecraft:spruce_slab", type="bottom")
+    # Shafts pointing east, one dropped to the ground.
+    camp.set(4, 2, 2, "minecraft:spruce_fence")
+    camp.set(4, 1, 3, "minecraft:spruce_fence")
+
+    # The load: the chest still on the cart, a bale that slid off.
+    camp.set(1, 3, 2, "minecraft:chest", nbt=LOOT_CHEST, facing="south")
+    camp.set(2, 3, 3, "minecraft:hay_block", axis="y")
+    camp.set(5, 1, 4, "minecraft:hay_block", axis="x")
+
+    camp.set(3, 1, 5, "minecraft:campfire", lit="false")
+    camp.set(1, 1, 5, "minecraft:spruce_log", axis="x")
+    camp.set(5, 1, 1, "minecraft:skeleton_skull", rotation="10")
+
+    camp.write(OUTPUT / "abandoned_camp" / "cart.nbt")
+
+
+def ruin():
+    """The corner of a fallen stone hut that someone camped in: two broken walls, a hearth, a chest."""
+    camp = new_layout([
+        "smsss  ",
+        "mccgcc ",
+        "sccccc ",
+        "scgcccc",
+        "sccccc ",
+        " cccc  ",
+        "  cc   ",
+    ])
+
+    # North and west walls, two blocks high where they still stand, with a gap where a window was.
+    north = {0: 3, 1: 2, 2: 2, 3: 1, 4: 2}
+    west = {1: 2, 2: 1, 3: 2, 4: 1}
+    mossy = {(0, 1, 0), (2, 2, 0), (4, 1, 0), (0, 2, 1), (0, 1, 3)}
+    for x, height in north.items():
+        for y in range(1, height + 1):
+            camp.set(x, y, 0, "minecraft:mossy_cobblestone" if (x, y, 0) in mossy else "minecraft:cobblestone")
+    for z, height in west.items():
+        for y in range(1, height + 1):
+            camp.set(0, y, z, "minecraft:mossy_cobblestone" if (0, y, z) in mossy else "minecraft:cobblestone")
+
+    camp.set(1, 1, 1, "minecraft:chest", nbt=LOOT_CHEST, facing="south")
+    camp.set(3, 1, 1, "minecraft:furnace", facing="south", lit="false")
+    camp.set(1, 2, 1, "minecraft:cobweb")
+    camp.set(3, 1, 3, "minecraft:campfire", lit="false")
+    camp.set(5, 1, 3, "minecraft:spruce_log", axis="z")
+    camp.set(2, 1, 5, "minecraft:hay_block", axis="x")
+
+    camp.write(OUTPUT / "abandoned_camp" / "ruin.nbt")
+
+
+LAYOUTS = (lean_to, tent, cart, ruin)
+
 if __name__ == "__main__":
-    abandoned_camp()
+    for layout in LAYOUTS:
+        layout()

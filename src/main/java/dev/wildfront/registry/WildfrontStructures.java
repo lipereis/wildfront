@@ -1,5 +1,7 @@
 package dev.wildfront.registry;
 
+import java.util.List;
+
 import dev.wildfront.Wildfront;
 import dev.wildfront.worldgen.FlatGroundJigsawStructure;
 
@@ -30,6 +32,15 @@ public final class WildfrontStructures {
 	public static final ResourceKey<StructureSet> ABANDONED_CAMPS = ResourceKey.create(Registries.STRUCTURE_SET, Wildfront.id("abandoned_camps"));
 	public static final ResourceKey<StructureTemplatePool> ABANDONED_CAMP_START_POOL = ResourceKey.create(Registries.TEMPLATE_POOL, Wildfront.id("abandoned_camp/start"));
 	public static final Identifier ABANDONED_CAMP_TEMPLATE = Wildfront.id("abandoned_camp/camp");
+
+	/**
+	 * Every layout an abandoned camp can have; each is a template in the camp's start pool.
+	 */
+	public static final List<Identifier> ABANDONED_CAMP_LAYOUTS = List.of(
+			ABANDONED_CAMP_TEMPLATE,
+			Wildfront.id("abandoned_camp/tent"),
+			Wildfront.id("abandoned_camp/cart"),
+			Wildfront.id("abandoned_camp/ruin"));
 	public static final TagKey<Biome> HAS_ABANDONED_CAMP = TagKey.create(Registries.BIOME, Wildfront.id("has_structure/abandoned_camp"));
 
 	private WildfrontStructures() {

@@ -3,6 +3,7 @@ package dev.wildfront.gametest.client;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
 import com.mojang.datafixers.util.Pair;
@@ -25,6 +26,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
@@ -62,6 +64,7 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 			server.runCommand("gamerule advance_time false");
 
 			naturallyGeneratedCamp(context, world, player);
+			layoutGallery(context, world, player);
 			forcedEvent(context, world, player);
 			automaticEvent(context, world, player);
 		}
@@ -100,6 +103,79 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 		server.runCommand("tp " + player + " " + (campfire.getX() + 7.5) + " " + (campfire.getY() + 4) + " " + (campfire.getZ() + 7.5) + " 135 25");
 		context.waitTicks(20);
 		takeWorldScreenshot(context, "1_abandoned_camp_from_south_east");
+	}
+
+	/**
+	 * Builds every camp layout on a dry, level, open patch of the terrain and takes a picture of
+	 * each, so a change to a layout can be looked at without hunting for it in the world.
+	 */
+	private static void layoutGallery(ClientGameTestContext context, TestSingleplayerContext world, String player) {
+		TestServerContext server = world.getServer();
+		List<BlockPos> sites = server.computeOnServer(s -> findGallerySites(s.overworld(),
+				s.getPlayerList().getPlayers().get(0).blockPosition(), WildfrontStructures.ABANDONED_CAMP_LAYOUTS.size()));
+		check(sites.size() == WildfrontStructures.ABANDONED_CAMP_LAYOUTS.size(),
+				"expected to find a level patch of ground for every layout near the camp, but found " + sites.size());
+
+		for (int i = 0; i < sites.size(); i++) {
+			Identifier layout = WildfrontStructures.ABANDONED_CAMP_LAYOUTS.get(i);
+			BlockPos site = sites.get(i);
+			String name = layout.getPath().substring(layout.getPath().lastIndexOf('/') + 1);
+
+			// One below the surface, so the layout's ground layer replaces the top block.
+			server.runCommand("place template " + layout + " " + site.getX() + " " + (site.getY() - 1) + " " + site.getZ());
+			check(server.computeOnServer(s -> BlockPos.betweenClosedStream(site.below(), site.offset(6, 2, 6))
+					.anyMatch(pos -> s.overworld().getBlockState(pos).is(Blocks.CAMPFIRE))), "layout " + layout + " should have been built at " + site.toShortString());
+
+			// From the south-east, which is the side the tent and the ruin are open to.
+			server.runCommand("gamemode spectator " + player);
+			server.runCommand("tp " + player + " " + (site.getX() + 9.5) + " " + (site.getY() + 6) + " " + (site.getZ() + 9.5) + " 135 38");
+			world.getConnection().waitForChunksRender();
+			takeWorldScreenshot(context, "1_layout_" + name);
+		}
+	}
+
+	/**
+	 * Finds north-west corners of 7x7 patches near {@code center} that are level, dry and not under
+	 * trees, at least 12 blocks apart. Only looks at loaded chunks.
+	 */
+	private static List<BlockPos> findGallerySites(ServerLevel level, BlockPos center, int count) {
+		List<BlockPos> sites = new ArrayList<>();
+
+		for (int ring = 1; ring <= 7 && sites.size() < count; ring++) {
+			for (int dx = -ring; dx <= ring && sites.size() < count; dx++) {
+				for (int dz = -ring; dz <= ring && sites.size() < count; dz++) {
+					if (Math.max(Math.abs(dx), Math.abs(dz)) != ring) {
+						continue;
+					}
+
+					int x = center.getX() + dx * 12;
+					int z = center.getZ() + dz * 12;
+
+					if (!level.isLoaded(new BlockPos(x, center.getY(), z)) || !level.isLoaded(new BlockPos(x + 6, center.getY(), z + 6))) {
+						continue;
+					}
+
+					int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+					boolean suitable = true;
+
+					for (int ox = 0; ox <= 6 && suitable; ox += 3) {
+						for (int oz = 0; oz <= 6 && suitable; oz += 3) {
+							BlockPos ground = new BlockPos(x + ox, y - 1, z + oz);
+							suitable = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x + ox, z + oz) == y
+									&& level.getHeight(Heightmap.Types.WORLD_SURFACE, x + ox, z + oz) <= y + 1
+									&& level.getBlockState(ground).is(Blocks.GRASS_BLOCK)
+									&& level.getFluidState(ground.above()).isEmpty();
+						}
+					}
+
+					if (suitable) {
+						sites.add(new BlockPos(x, y, z));
+					}
+				}
+			}
+		}
+
+		return sites;
 	}
 
 	private static void forcedEvent(ClientGameTestContext context, TestSingleplayerContext world, String player) {

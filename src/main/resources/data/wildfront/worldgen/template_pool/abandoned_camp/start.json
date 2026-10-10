@@ -2,10 +2,37 @@
 	"fallback": "minecraft:empty",
 	"elements": [
 		{
-			"weight": 1,
+			"weight": 3,
 			"element": {
 				"element_type": "minecraft:single_pool_element",
 				"location": "wildfront:abandoned_camp/camp",
+				"projection": "rigid",
+				"processors": "minecraft:empty"
+			}
+		},
+		{
+			"weight": 3,
+			"element": {
+				"element_type": "minecraft:single_pool_element",
+				"location": "wildfront:abandoned_camp/tent",
+				"projection": "rigid",
+				"processors": "minecraft:empty"
+			}
+		},
+		{
+			"weight": 2,
+			"element": {
+				"element_type": "minecraft:single_pool_element",
+				"location": "wildfront:abandoned_camp/cart",
+				"projection": "rigid",
+				"processors": "minecraft:empty"
+			}
+		},
+		{
+			"weight": 2,
+			"element": {
+				"element_type": "minecraft:single_pool_element",
+				"location": "wildfront:abandoned_camp/ruin",
 				"projection": "rigid",
 				"processors": "minecraft:empty"
 			}

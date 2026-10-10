@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0
+
+### Added
+
+- **Three more abandoned camp layouts.** Besides the lean-to camp there are now a sagging wool
+  tent, a broken-down cart with its load still on it, and the corner of a fallen stone hut. Every
+  camp still has a cold fire pit and one chest of travel supplies. Which layout a camp gets is
+  random; the lean-to and the tent are slightly more common. Only newly generated chunks are
+  affected.
+
 ## 0.1.1
 
 ### Fixed
@@ -38,7 +48,7 @@ For Minecraft 26.3 with Fabric Loader 0.19.5 or newer and Fabric API. Requires J
 
 ### Known limitations
 
-- Abandoned camps have a single layout; only their rotation varies.
+- Abandoned camps have a single layout; only their rotation varies. (Three more layouts were added in 0.2.0.)
 - How often camps generate is changed with a data pack, not the config file.
 - The weather condition uses the world's weather and does not account for biomes where it never
   rains.

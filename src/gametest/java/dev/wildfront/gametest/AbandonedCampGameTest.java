@@ -11,12 +11,14 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CampfireBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.levelgen.structure.pools.StructureTemplatePool;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 
@@ -73,6 +75,75 @@ public class AbandonedCampGameTest {
 	}
 
 	/**
+	 * Each layout must be a loadable 7x4x7 template (the size the level-ground check assumes) with
+	 * exactly one unlit campfire and exactly one loot chest: the other tests find camps by those.
+	 */
+	@GameTest
+	public void everyLayoutHasACampfireAndOneLootChest(GameTestHelper helper) {
+		ServerLevel level = helper.getLevel();
+		BlockPos origin = helper.absolutePos(BlockPos.ZERO);
+
+		for (Identifier id : WildfrontStructures.ABANDONED_CAMP_LAYOUTS) {
+			StructureTemplate template = level.getStructureTemplateManager().get(id).orElse(null);
+			helper.assertTrue(template != null, "template " + id + " should load");
+			helper.assertTrue(template.getSize().equals(new Vec3i(7, 4, 7)), "template " + id + " should be 7x4x7 but was " + template.getSize());
+
+			for (BlockPos pos : BlockPos.betweenClosed(origin, origin.offset(6, 3, 6))) {
+				level.removeBlock(pos, false);
+			}
+
+			helper.killAllEntities();
+			helper.assertTrue(template.placeInWorld(level, origin, origin, new StructurePlaceSettings(), level.getRandom(), 2), "template " + id + " should be placed");
+
+			int campfires = 0;
+			int lootChests = 0;
+			int groundBlocks = 0;
+
+			for (BlockPos pos : BlockPos.betweenClosed(origin, origin.offset(6, 3, 6))) {
+				BlockState state = level.getBlockState(pos);
+
+				if (state.is(Blocks.CAMPFIRE)) {
+					campfires++;
+					helper.assertFalse(state.getValue(CampfireBlock.LIT), "the campfire of " + id + " should be cold");
+					helper.assertTrue(pos.getY() == origin.getY() + 1, "the campfire of " + id + " should stand on the ground layer");
+					helper.assertTrue(level.getBlockState(pos.below()).is(Blocks.COARSE_DIRT), "the campfire of " + id + " should stand on coarse dirt");
+				}
+
+				if (level.getBlockEntity(pos) instanceof ChestBlockEntity chest && WildfrontLootTables.ABANDONED_CAMP.equals(chest.getLootTable())) {
+					lootChests++;
+					helper.assertFalse(level.getBlockState(pos.below()).isAir(), "the chest of " + id + " should stand on something");
+					chest.unpackLootTable(null);
+					helper.assertFalse(chest.isEmpty(), "the chest of " + id + " should generate loot");
+					chest.clearContent();
+				}
+
+				if (pos.getY() == origin.getY() && !state.isAir()) {
+					groundBlocks++;
+				}
+			}
+
+			helper.assertTrue(campfires == 1, id + " should have exactly one campfire but has " + campfires);
+			helper.assertTrue(lootChests == 1, id + " should have exactly one loot chest but has " + lootChests);
+			helper.assertTrue(groundBlocks >= 20, id + " should have a ground layer but has only " + groundBlocks + " ground blocks");
+		}
+
+		helper.succeed();
+	}
+
+	@GameTest
+	public void startPoolOffersEveryLayout(GameTestHelper helper) {
+		StructureTemplatePool pool = helper.getLevel().registryAccess().lookupOrThrow(Registries.TEMPLATE_POOL)
+				.get(WildfrontStructures.ABANDONED_CAMP_START_POOL).orElseThrow().value();
+		String elements = pool.getShuffledTemplates(helper.getLevel().getRandom()).toString();
+
+		for (Identifier id : WildfrontStructures.ABANDONED_CAMP_LAYOUTS) {
+			helper.assertTrue(elements.contains(id.toString()), "the camp's start pool should offer " + id + " but contains " + elements);
+		}
+
+		helper.succeed();
+	}
+
+	/**
 	 * Generates the camp the way world generation and {@code /place structure} do: through the
 	 * structure definition, its start pool and its height projection, with a random rotation.
 	 */
@@ -101,12 +172,19 @@ public class AbandonedCampGameTest {
 		for (BlockPos pos : BlockPos.betweenClosed(start.offset(-9, -8, -9), start.offset(9, 0, 9))) {
 			if (level.getBlockState(pos).is(Blocks.CAMPFIRE)) {
 				campfire = pos.immutable();
-			} else if (level.getBlockEntity(pos) instanceof ChestBlockEntity found && WildfrontLootTables.ABANDONED_CAMP.equals(found.getLootTable())) {
-				chest = pos.immutable();
 			}
 		}
 
 		helper.assertTrue(campfire != null, "the generated camp should contain its campfire");
+
+		// The chest stands on the ground or, in the cart layout, two blocks up on the cart. Looking
+		// no higher than that keeps chests that other tests place in their areas out of the search.
+		for (BlockPos pos : BlockPos.betweenClosed(campfire.offset(-6, 0, -6), campfire.offset(6, 2, 6))) {
+			if (level.getBlockEntity(pos) instanceof ChestBlockEntity found && WildfrontLootTables.ABANDONED_CAMP.equals(found.getLootTable())) {
+				chest = pos.immutable();
+			}
+		}
+
 		helper.assertTrue(chest != null, "the generated camp should contain its loot chest");
 		helper.assertTrue(level.getBlockState(campfire.below()).is(Blocks.COARSE_DIRT), "the camp's ground layer should be under the campfire");
 		helper.assertFalse(level.getBlockState(campfire.below(2)).isAir(), "the camp should rest on the terrain, not float above it");
@@ -115,7 +193,9 @@ public class AbandonedCampGameTest {
 		BlockState above = level.getBlockState(campfire.above());
 		helper.assertTrue(above.isAir() || above.is(Blocks.BARRIER) || above.is(Blocks.TEST_INSTANCE_BLOCK),
 				"the camp should not be buried, but " + above.getBlock() + " is above its campfire");
-		helper.assertTrue(chest.getY() == campfire.getY(), "chest and campfire should stand on the same level");
+		// In most layouts the chest stands on the ground; in the cart layout it rides on the cart.
+		helper.assertTrue(chest.getY() >= campfire.getY() && chest.getY() <= campfire.getY() + 2,
+				"the chest should be at or just above the campfire's level, but campfire " + campfire + ", chest " + chest);
 
 		// The template's bottom layer must replace the top block of the terrain. One block lower
 		// and the whole camp sits in a dip that the terrain adaptation then digs around it.

@@ -46,21 +46,23 @@ Upload in this order; make the first one the featured image.
 | File | Title | Description |
 |---|---|---|
 | `gallery/1-forgotten-cache.png` | Forgotten cache | A forgotten cache marked by its column of particles. |
-| `gallery/2-abandoned-camp-forest.png` | Abandoned camp in a birch forest | A naturally generated camp: lean-to, bedroll and what the traveller left behind. |
-| `gallery/3-abandoned-camp-plains.png` | Abandoned camp on the plains | Fire pit, log seats, crafting table and the supply chest. |
+| `gallery/2-camp-lean-to.png` | Abandoned camp: lean-to | Fire pit, log seats, a collapsed lean-to and the supply chest. |
+| `gallery/3-camp-tent.png` | Abandoned camp: tent | A sagging tent with a bedroll, a cold fire and a cauldron. |
+| `gallery/4-camp-cart.png` | Abandoned camp: cart | A broken-down cart with its load still on it. |
+| `gallery/5-camp-ruin.png` | Abandoned camp: ruin | The corner of a fallen stone hut that someone camped in. |
 
 ## Version
 
 | Field | Value |
 |---|---|
-| File | `wildfront-0.1.1+mc26.3.jar` from https://github.com/lipereis/wildfront/releases/latest (not the `-sources` jar) |
-| Version number | `0.1.1+mc26.3` |
-| Version title | `Wildfront 0.1.1` |
+| File | `wildfront-0.2.0+mc26.3.jar` from https://github.com/lipereis/wildfront/releases/latest (not the `-sources` jar) |
+| Version number | `0.2.0+mc26.3` |
+| Version title | `Wildfront 0.2.0` |
 | Release channel | Release (or Beta, if you would rather signal that it is new) |
 | Loaders | Fabric |
 | Game versions | 26.3 |
 | Dependencies | Fabric API — required |
-| Changelog | paste the `0.1.1` and `0.1.0` sections of `CHANGELOG.md`, since this is the first version on Modrinth |
+| Changelog | paste the `0.2.0`, `0.1.1` and `0.1.0` sections of `CHANGELOG.md`, since this is the first version on Modrinth |
 
 Modrinth usually fills in loader, game version and version number from the jar; check them
 against this table.
@@ -70,7 +72,7 @@ against this table.
 1. Sign in at https://modrinth.com and choose **Create a project** from the dashboard.
 2. Enter name, URL and summary from the first table.
 3. Fill in description, icon, tags, license and links.
-4. Upload the three gallery pictures.
+4. Upload the five gallery pictures.
 5. Create the version and upload the jar.
 6. Modrinth lists what is still missing next to the submit button; when nothing is, **submit for
    review**. A moderator has to approve the project before it becomes visible, which can take

@@ -28,6 +28,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BarrelBlockEntity;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 
 /**
@@ -40,6 +41,31 @@ public class WildfrontGameTest {
 
 	private static boolean isTracked(ServerLevel level, BlockPos pos) {
 		return DiscoveryManager.activeCaches(level).stream().map(ActiveCache::pos).anyMatch(pos::equals);
+	}
+
+	/**
+	 * Describes what the site finder sees around a position, for failure messages.
+	 */
+	private static String describeSurface(ServerLevel level, BlockPos origin) {
+		StringBuilder description = new StringBuilder("active caches: ").append(DiscoveryManager.activeCaches(level).size())
+				.append(", dimension: ").append(level.dimension().identifier()).append(", surface relative to origin:");
+
+		for (int dz = -3; dz <= 3; dz++) {
+			description.append(" [");
+
+			for (int dx = -3; dx <= 3; dx++) {
+				int x = origin.getX() + dx;
+				int z = origin.getZ() + dz;
+				int height = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+				BlockPos site = new BlockPos(x, height, z);
+				description.append(height - origin.getY()).append(CacheSiteFinder.isSuitable(level, site, origin) ? "+" : "-")
+						.append(level.hasChunk(x >> 4, z >> 4) ? "" : "!").append(' ');
+			}
+
+			description.append(']');
+		}
+
+		return description.toString();
 	}
 
 	@GameTest
@@ -66,6 +92,7 @@ public class WildfrontGameTest {
 		DiscoveryManager.tick(level, now);
 		helper.assertFalse(isTracked(level, pos), "opened cache should no longer be tracked");
 		helper.assertBlockPresent(Blocks.BARREL, CACHE);
+		GameTestSupport.removeCaches(helper);
 		helper.succeed();
 	}
 
@@ -81,6 +108,7 @@ public class WildfrontGameTest {
 		helper.assertBlockPresent(Blocks.AIR, CACHE);
 		helper.assertFalse(isTracked(level, pos), "expired cache should no longer be tracked");
 		helper.assertTrue(level.getEntitiesOfClass(ItemEntity.class, new AABB(pos).inflate(3)).isEmpty(), "removing an expired cache should not drop items");
+		GameTestSupport.removeCaches(helper);
 		helper.succeed();
 	}
 
@@ -97,6 +125,7 @@ public class WildfrontGameTest {
 
 		DiscoveryManager.tick(level, now + 100);
 		helper.assertBlockPresent(Blocks.AIR, CACHE);
+		GameTestSupport.removeCaches(helper);
 		helper.succeed();
 	}
 
@@ -111,6 +140,7 @@ public class WildfrontGameTest {
 
 		helper.assertFalse(isTracked(level, pos), "destroyed cache should no longer be tracked");
 		helper.killAllEntities();
+		GameTestSupport.removeCaches(helper);
 		helper.succeed();
 	}
 
@@ -126,6 +156,7 @@ public class WildfrontGameTest {
 		helper.assertTrue(DiscoveryManager.hasCapacity(level, now + 100, (int) active + 1), "an expired cache should not use capacity");
 
 		DiscoveryManager.tick(level, now + 100);
+		GameTestSupport.removeCaches(helper);
 		helper.succeed();
 	}
 
@@ -176,7 +207,7 @@ public class WildfrontGameTest {
 			long now = level.getGameTime();
 
 			Optional<WorldEvent.Plan> plan = event.plan(new EventContext(player, level, now, eventConfig, config));
-			helper.assertTrue(plan.isPresent(), "the event should find a place on a flat stone floor");
+			helper.assertTrue(plan.isPresent(), "the event should find a place on a flat stone floor; " + describeSurface(level, origin));
 			helper.assertTrue(DiscoveryManager.activeCaches(level).stream().noneMatch(cache -> cache.pos().closerThan(origin, 6)),
 					"planning must not change the world");
 
@@ -192,6 +223,7 @@ public class WildfrontGameTest {
 			helper.assertTrue(isTracked(level, placed.get(0).pos()), "a fresh cache should stay tracked");
 		} finally {
 			GameTestSupport.remove(helper, player);
+			GameTestSupport.removeCaches(helper);
 		}
 
 		helper.succeed();

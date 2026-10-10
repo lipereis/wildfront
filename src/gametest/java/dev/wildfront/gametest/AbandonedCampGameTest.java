@@ -1,5 +1,7 @@
 package dev.wildfront.gametest;
 
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+
 import dev.wildfront.registry.WildfrontLootTables;
 import dev.wildfront.registry.WildfrontStructures;
 
@@ -13,6 +15,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CampfireBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 
@@ -77,13 +80,24 @@ public class AbandonedCampGameTest {
 		ServerLevel level = helper.getLevel();
 		BlockPos center = helper.absolutePos(new BlockPos(4, 0, 4));
 
-		level.getServer().getCommands().performPrefixedCommand(level.getServer().createCommandSourceStack().withSuppressedOutput(),
-				"place structure wildfront:abandoned_camp " + center.getX() + " " + center.getY() + " " + center.getZ());
+		String command = "place structure wildfront:abandoned_camp " + center.getX() + " " + center.getY() + " " + center.getZ();
+
+		try {
+			level.getServer().getCommands().getDispatcher().execute(command, level.getServer().createCommandSourceStack().withSuppressedOutput());
+		} catch (CommandSyntaxException e) {
+			throw helper.assertionException("/" + command + " failed: " + e.getMessage());
+		}
 
 		BlockPos campfire = null;
 		BlockPos chest = null;
 
-		for (BlockPos pos : BlockPos.betweenClosed(center.offset(-12, -8, -12), center.offset(12, 8, 12))) {
+		// Jigsaw structures start at the north-west corner of the chunk containing the requested
+		// position and are rotated randomly around it, so that corner is where to look. The camp
+		// generates on the test world's surface, which lies below every test area; looking only
+		// there keeps the camp another test builds from its template out of the search.
+		BlockPos start = new BlockPos(center.getX() & ~15, center.getY() - 1, center.getZ() & ~15);
+
+		for (BlockPos pos : BlockPos.betweenClosed(start.offset(-9, -8, -9), start.offset(9, 0, 9))) {
 			if (level.getBlockState(pos).is(Blocks.CAMPFIRE)) {
 				campfire = pos.immutable();
 			} else if (level.getBlockEntity(pos) instanceof ChestBlockEntity found && WildfrontLootTables.ABANDONED_CAMP.equals(found.getLootTable())) {
@@ -95,7 +109,11 @@ public class AbandonedCampGameTest {
 		helper.assertTrue(chest != null, "the generated camp should contain its loot chest");
 		helper.assertTrue(level.getBlockState(campfire.below()).is(Blocks.COARSE_DIRT), "the camp's ground layer should be under the campfire");
 		helper.assertFalse(level.getBlockState(campfire.below(2)).isAir(), "the camp should rest on the terrain, not float above it");
-		helper.assertTrue(level.getBlockState(campfire.above()).isAir(), "the camp should not be buried");
+		// The chunk corner can lie under a neighbouring test area, whose frame of barriers and
+		// control block is not terrain.
+		BlockState above = level.getBlockState(campfire.above());
+		helper.assertTrue(above.isAir() || above.is(Blocks.BARRIER) || above.is(Blocks.TEST_INSTANCE_BLOCK),
+				"the camp should not be buried, but " + above.getBlock() + " is above its campfire");
 		helper.assertTrue(chest.getY() == campfire.getY(), "chest and campfire should stand on the same level");
 		helper.succeed();
 	}

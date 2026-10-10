@@ -95,6 +95,7 @@ public class EventSystemGameTest {
 			helper.assertTrue(cachesNear(level, origin) == 2, "the event should trigger again once the cooldown is over");
 		} finally {
 			GameTestSupport.remove(helper, first, second, creative);
+			GameTestSupport.removeCaches(helper);
 		}
 
 		helper.succeed();
@@ -122,6 +123,7 @@ public class EventSystemGameTest {
 			helper.assertTrue(cachesNear(level, origin) == 2, "the event should trigger once the global cooldown is over");
 		} finally {
 			GameTestSupport.remove(helper, player);
+			GameTestSupport.removeCaches(helper);
 		}
 
 		helper.succeed();
@@ -209,6 +211,7 @@ public class EventSystemGameTest {
 			helper.assertTrue(cacheLook < 1_000_000, "a look at " + caches + " caches took " + cacheLook + " ns");
 		} finally {
 			GameTestSupport.remove(helper, player);
+			GameTestSupport.removeCaches(helper);
 		}
 
 		helper.succeed();

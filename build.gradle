@@ -64,6 +64,15 @@ test {
 	useJUnitPlatform()
 }
 
+// Game tests start from a new world every time, so a run cannot be affected by what an earlier
+// run left behind. Without this, locally repeated runs behave differently from CI.
+tasks.named("runGameTest") {
+	def world = layout.buildDirectory.dir("run/gameTest/world")
+	doFirst {
+		world.get().asFile.deleteDir()
+	}
+}
+
 // Starts a real, non-development client with the release jar, the way a player would run it.
 tasks.register("runProductionClient", net.fabricmc.loom.task.prod.ClientProductionRunTask) {
 	group = "fabric"

@@ -31,3 +31,4 @@ For Minecraft 26.3 with Fabric Loader 0.19.5 or newer and Fabric API. Requires J
   rains.
 - Anyone may open or break a forgotten cache; it is not reserved for the player who triggered it.
 - The mod is needed on the server only for gameplay; clients without it see English text.
+- Tested on a dedicated server with a single connected player only; not yet with several players.

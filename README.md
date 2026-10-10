@@ -72,7 +72,12 @@ Runs the unit tests and the headless in-world game tests, and writes the release
 | `.\gradlew.bat test` | Unit tests for logic that needs no world: scheduling, cooldowns, config validation, directions | yes |
 | `.\gradlew.bat runGameTest` | Game tests on a headless server: caches, loot, expiry, site selection, the automatic event check with several players, commands, camp data and generation, and a timing check of the timer-driven code. Ends with `All N required tests passed` | yes |
 | `.\gradlew.bat runClientGameTest` | Opens a real game window, creates a normally generated world, finds a naturally generated camp, triggers the event by command and waits for it to trigger on its own. Writes screenshots to `build/run/clientGameTest/screenshots` | no |
+| `.\gradlew.bat runClientGameTest "-Pwildfront.acceptMinecraftEula=true"` | The same, followed by a dedicated-server test: starts a real dedicated server on localhost, connects the client to it and checks command permissions, a forced and an automatic event, finding and expiry of a cache, and a naturally generated camp. Without the flag this part reports `SKIPPED` | no |
 | `.\gradlew.bat runProductionClient` | Starts a non-development client with the release jar, as a player would run it. Close the window to end it | no |
+
+Starting a dedicated server requires accepting the [Minecraft EULA](https://aka.ms/MinecraftEULA).
+Passing `-Pwildfront.acceptMinecraftEula=true` is how you state that you accept it; it is never
+accepted by default and CI does not run this test.
 
 ### Performance
 

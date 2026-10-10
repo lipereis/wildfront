@@ -157,7 +157,7 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 		}
 	}
 
-	private static BlockPos findCampfire(ServerLevel level, BlockPos near) {
+	static BlockPos findCampfire(ServerLevel level, BlockPos near) {
 		for (BlockPos pos : BlockPos.betweenClosed(near.getX() - 16, level.getMinY(), near.getZ() - 16, near.getX() + 16, level.getMaxY(), near.getZ() + 16)) {
 			if (level.getBlockState(pos).is(Blocks.CAMPFIRE)) {
 				return pos.immutable();

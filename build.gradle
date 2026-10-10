@@ -24,6 +24,10 @@ fabricApi {
 		modId = "wildfront-test"
 		enableGameTests = true
 		enableClientGameTests = true
+		// The dedicated-server part of the client game tests needs the Minecraft EULA
+		// (https://aka.ms/MinecraftEULA). It is only accepted when asked for on the command line:
+		//   gradlew runClientGameTest -Pwildfront.acceptMinecraftEula=true
+		eula = providers.gradleProperty("wildfront.acceptMinecraftEula").map { it == "true" }.getOrElse(false)
 	}
 }
 
@@ -70,6 +74,18 @@ tasks.named("runGameTest") {
 	def world = layout.buildDirectory.dir("run/gameTest/world")
 	doFirst {
 		world.get().asFile.deleteDir()
+	}
+}
+
+// An eula.txt left behind by an earlier run that accepted the EULA must not carry over to a run
+// that did not ask for it.
+tasks.named("runClientGameTest") {
+	def eulaFile = layout.buildDirectory.file("run/clientGameTest/eula.txt")
+	def accepted = providers.gradleProperty("wildfront.acceptMinecraftEula").map { it == "true" }.getOrElse(false)
+	doFirst {
+		if (!accepted) {
+			eulaFile.get().asFile.delete()
+		}
 	}
 }
 

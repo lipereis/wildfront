@@ -5,6 +5,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
+import com.mojang.serialization.JsonOps;
+
 import dev.wildfront.config.ConfigManager;
 import dev.wildfront.config.DiscoveryConfig;
 import dev.wildfront.config.EventConfig;
@@ -26,6 +30,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BarrelBlockEntity;
 import net.minecraft.world.level.levelgen.Heightmap;
@@ -126,6 +131,95 @@ public class WildfrontGameTest {
 		DiscoveryManager.tick(level, now + 100);
 		helper.assertBlockPresent(Blocks.AIR, CACHE);
 		GameTestSupport.removeCaches(helper);
+		helper.succeed();
+	}
+
+	/**
+	 * Grass under a cache turns to dirt in a real world. The original ground must come back when
+	 * an unopened cache is removed, and nothing else may be touched.
+	 */
+	@GameTest
+	public void groundUnderAnExpiredCacheIsRestored(GameTestHelper helper) {
+		ServerLevel level = helper.getLevel();
+		long now = level.getGameTime();
+		BlockPos[] spots = {new BlockPos(1, 1, 1), new BlockPos(3, 1, 1), new BlockPos(5, 1, 1), new BlockPos(1, 1, 5), new BlockPos(3, 1, 5)};
+		Block[] grounds = {Blocks.GRASS_BLOCK, Blocks.MYCELIUM, Blocks.STONE, Blocks.DIRT, Blocks.GRASS_BLOCK};
+
+		for (int i = 0; i < spots.length; i++) {
+			helper.setBlock(spots[i].below(), grounds[i]);
+			helper.assertTrue(DiscoveryManager.place(level, helper.absolutePos(spots[i]), now), "cache " + i + " should be placed");
+		}
+
+		// What the game does to grass and mycelium under a solid block, and a player replacing
+		// the ground under the last cache with something else.
+		helper.setBlock(spots[0].below(), Blocks.DIRT);
+		helper.setBlock(spots[1].below(), Blocks.DIRT);
+		helper.setBlock(spots[4].below(), Blocks.COBBLESTONE);
+
+		DiscoveryManager.tick(level, now);
+
+		for (BlockPos spot : spots) {
+			helper.assertBlockPresent(Blocks.AIR, spot);
+		}
+
+		helper.assertBlockPresent(Blocks.GRASS_BLOCK, spots[0].below());
+		helper.assertBlockPresent(Blocks.MYCELIUM, spots[1].below());
+		helper.assertBlockPresent(Blocks.STONE, spots[2].below());
+		helper.assertBlockPresent(Blocks.DIRT, spots[3].below());
+		helper.assertBlockPresent(Blocks.COBBLESTONE, spots[4].below());
+		GameTestSupport.removeCaches(helper);
+		helper.succeed();
+	}
+
+	@GameTest
+	public void groundIsNotRestoredUnderSomethingBuiltWhereTheCacheStood(GameTestHelper helper) {
+		ServerLevel level = helper.getLevel();
+		BlockPos pos = helper.absolutePos(CACHE);
+
+		helper.setBlock(CACHE.below(), Blocks.GRASS_BLOCK);
+		helper.assertTrue(DiscoveryManager.place(level, pos, FAR_FUTURE), "cache should be placed");
+		helper.setBlock(CACHE.below(), Blocks.DIRT);
+		helper.setBlock(CACHE, Blocks.OAK_PLANKS);
+		DiscoveryManager.tick(level, level.getGameTime());
+
+		helper.assertFalse(isTracked(level, pos), "replaced cache should no longer be tracked");
+		helper.assertBlockPresent(Blocks.DIRT, CACHE.below());
+
+		helper.setBlock(CACHE, Blocks.AIR);
+		GameTestSupport.removeCaches(helper);
+		helper.succeed();
+	}
+
+	@GameTest
+	public void groundUnderABrokenCacheIsRestored(GameTestHelper helper) {
+		ServerLevel level = helper.getLevel();
+		BlockPos pos = helper.absolutePos(CACHE);
+
+		helper.setBlock(CACHE.below(), Blocks.GRASS_BLOCK);
+		helper.assertTrue(DiscoveryManager.place(level, pos, FAR_FUTURE), "cache should be placed");
+		helper.setBlock(CACHE.below(), Blocks.DIRT);
+		helper.setBlock(CACHE, Blocks.AIR);
+		DiscoveryManager.tick(level, level.getGameTime());
+
+		helper.assertBlockPresent(Blocks.GRASS_BLOCK, CACHE.below());
+		helper.killAllEntities();
+		GameTestSupport.removeCaches(helper);
+		helper.succeed();
+	}
+
+	/**
+	 * Worlds saved before the ground was recorded contain caches without it; they must still load.
+	 */
+	@GameTest
+	public void cachesSavedWithoutGroundStillLoad(GameTestHelper helper) {
+		ActiveCache old = ActiveCache.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString("{\"pos\": [1, 2, 3], \"expires_at\": 5}"))
+				.result().orElse(null);
+		helper.assertTrue(old != null, "a cache saved without ground should load");
+		helper.assertTrue(old.pos().equals(new BlockPos(1, 2, 3)) && old.expiresAt() == 5 && old.ground().isEmpty(), "unexpected result: " + old);
+
+		ActiveCache current = new ActiveCache(new BlockPos(4, 5, 6), 7, Optional.of(Blocks.GRASS_BLOCK.defaultBlockState()));
+		JsonElement saved = ActiveCache.CODEC.encodeStart(JsonOps.INSTANCE, current).result().orElseThrow();
+		helper.assertTrue(current.equals(ActiveCache.CODEC.parse(JsonOps.INSTANCE, saved).result().orElse(null)), "a cache should survive saving and loading: " + saved);
 		helper.succeed();
 	}
 

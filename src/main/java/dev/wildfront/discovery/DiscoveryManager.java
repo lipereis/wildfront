@@ -2,6 +2,7 @@ package dev.wildfront.discovery;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import dev.wildfront.Wildfront;
 import dev.wildfront.registry.WildfrontAttachments;
@@ -22,6 +23,7 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.block.BarrelBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BarrelBlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * Places forgotten caches and looks after them until they are found, destroyed or expire.
@@ -82,6 +84,8 @@ public final class DiscoveryManager {
 	 * @return false if the block could not be placed; nothing is tracked in that case
 	 */
 	public static boolean place(ServerLevel level, BlockPos pos, long expiresAt) {
+		BlockState ground = level.getBlockState(pos.below());
+
 		if (!level.setBlockAndUpdate(pos, Blocks.BARREL.defaultBlockState().setValue(BarrelBlock.FACING, Direction.UP))
 				|| !(level.getBlockEntity(pos) instanceof BarrelBlockEntity barrel)) {
 			Wildfront.LOGGER.warn("[Wildfront] Could not place a forgotten cache at {}", pos.toShortString());
@@ -98,7 +102,7 @@ public final class DiscoveryManager {
 			Wildfront.LOGGER.warn("[Wildfront] Too many tracked caches; no longer tracking the one at {}", caches.remove(0).pos().toShortString());
 		}
 
-		caches.add(new ActiveCache(pos.immutable(), expiresAt));
+		caches.add(new ActiveCache(pos.immutable(), expiresAt, Optional.of(ground)));
 		level.setAttached(WildfrontAttachments.ACTIVE_CACHES, List.copyOf(caches));
 
 		Wildfront.LOGGER.info("[Wildfront] Forgotten cache placed at {} (expires at game time {}, {} active)",
@@ -139,7 +143,8 @@ public final class DiscoveryManager {
 
 		if (!(level.getBlockEntity(pos) instanceof BarrelBlockEntity barrel)) {
 			// Broken by a player, an explosion or anything else. Breaking a barrel drops its loot,
-			// so there is nothing left to do.
+			// so only the ground is left to look after.
+			restoreGround(level, cache);
 			Wildfront.LOGGER.info("[Wildfront] Forgotten cache at {} is gone", pos.toShortString());
 			return false;
 		}
@@ -152,6 +157,7 @@ public final class DiscoveryManager {
 
 		if (now >= cache.expiresAt()) {
 			expire(level, barrel, pos);
+			restoreGround(level, cache);
 			return false;
 		}
 
@@ -162,6 +168,23 @@ public final class DiscoveryManager {
 		}
 
 		return true;
+	}
+
+	/**
+	 * Grass and mycelium turn to dirt while a solid block such as the cache stands on them. Once
+	 * the cache is gone, puts the original block back so that no bare patch marks the spot. Only
+	 * acts if the ground is exactly that dirt and nothing has been put where the cache stood.
+	 */
+	private static void restoreGround(ServerLevel level, ActiveCache cache) {
+		BlockPos groundPos = cache.pos().below();
+		BlockState original = cache.ground().orElse(null);
+
+		if (original != null
+				&& (original.is(Blocks.GRASS_BLOCK) || original.is(Blocks.MYCELIUM))
+				&& level.getBlockState(groundPos).is(Blocks.DIRT)
+				&& level.getBlockState(cache.pos()).isAir()) {
+			level.setBlockAndUpdate(groundPos, original);
+		}
 	}
 
 	private static void onFound(ServerLevel level, BlockPos pos) {

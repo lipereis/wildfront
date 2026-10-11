@@ -5,8 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-
-import com.mojang.datafixers.util.Pair;
+import java.util.Map;
 
 import dev.wildfront.config.ConfigManager;
 import dev.wildfront.discovery.ActiveCache;
@@ -23,19 +22,16 @@ import net.fabricmc.loader.api.FabricLoader;
 
 import net.minecraft.client.gui.screens.worldselection.WorldCreationUiState;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Holder;
-import net.minecraft.core.HolderSet;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.levelgen.Heightmap;
-import net.minecraft.world.level.levelgen.structure.Structure;
 
 /**
- * Plays through the mod in a real client with a normally generated world: finds a naturally
- * generated abandoned camp, triggers the Mysterious Discovery event by command and lets it trigger
+ * Plays through the mod in a real client with a normally generated world: surveys where camps
+ * generate, visits a naturally generated camp of every layout, triggers the Mysterious Discovery event by command and lets it trigger
  * on its own. Screenshots of each step are written to {@code build/run/clientGameTest/screenshots}
  * for a human to look at.
  *
@@ -44,7 +40,21 @@ import net.minecraft.world.level.levelgen.structure.Structure;
  */
 public class WildfrontClientGameTest implements FabricClientGameTest {
 	private static final String SEED = "wildfront";
-	private static final int SEARCH_RADIUS_CHUNKS = 100;
+	/**
+	 * The survey stops once every layout was seen and this many camps were found. Enough for the
+	 * rarest layout (2 in 10) to be missed by chance less than once in a thousand runs.
+	 */
+	private static final int SURVEY_ENOUGH_CAMPS = 40;
+	private static final int SURVEY_MAX_CANDIDATES = 1200;
+
+	/**
+	 * A block that only this layout contains, by the layout's short name. The cart layout has none
+	 * and is recognised by its raised chest instead.
+	 */
+	private static final Map<String, Block> SIGNATURE_BLOCKS = Map.of(
+			"camp", Blocks.CRAFTING_TABLE,
+			"tent", Blocks.CAULDRON,
+			"ruin", Blocks.FURNACE);
 
 	@Override
 	public void runTest(ClientGameTestContext context) {
@@ -63,58 +73,108 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 			server.runCommand("weather clear");
 			server.runCommand("gamerule advance_time false");
 
-			naturallyGeneratedCamp(context, world, player);
-			layoutGallery(context, world, player);
+			List<BlockPos> visited = naturallyGeneratedCamps(context, world, player);
+			layoutGallery(context, world, player, visited);
 			forcedEvent(context, world, player);
 			automaticEvent(context, world, player);
 		}
 	}
 
-	private static void naturallyGeneratedCamp(ClientGameTestContext context, TestSingleplayerContext world, String player) {
+	/**
+	 * Surveys where world generation will put camps, checks that every layout occurs, then visits
+	 * the nearest camp of each layout and checks what actually generated there.
+	 *
+	 * @return the campfire positions of the visited camps
+	 */
+	private static List<BlockPos> naturallyGeneratedCamps(ClientGameTestContext context, TestSingleplayerContext world, String player) {
 		TestServerContext server = world.getServer();
+		CampSurvey.Result survey = server.computeOnServer(s -> CampSurvey.run(s.overworld(),
+				s.getPlayerList().getPlayers().get(0).blockPosition(), SURVEY_ENOUGH_CAMPS, SURVEY_MAX_CANDIDATES));
+		System.out.println("[WildfrontClientGameTest] survey: " + survey.camps().size() + " camps at " + survey.candidates()
+				+ " candidate spots (" + Math.round(100.0 * survey.camps().size() / survey.candidates()) + "%), by layout: " + survey.countByLayout());
 
-		BlockPos located = server.computeOnServer(s -> {
-			ServerLevel level = s.overworld();
-			Holder<Structure> camp = level.registryAccess().lookupOrThrow(Registries.STRUCTURE).get(WildfrontStructures.ABANDONED_CAMP).orElseThrow();
-			Pair<BlockPos, Holder<Structure>> nearest = level.getChunkSource().getGenerator().findNearestMapStructure(
-					level, HolderSet.direct(camp), s.getPlayerList().getPlayers().get(0).blockPosition(), SEARCH_RADIUS_CHUNKS, false);
-			return nearest == null ? null : nearest.getFirst();
-		});
-		check(located != null, "world generation should place an abandoned camp within " + SEARCH_RADIUS_CHUNKS + " chunks of spawn");
+		check(!survey.camps().isEmpty(), "world generation should place abandoned camps, but none of " + survey.candidates() + " candidate spots has one");
 
-		server.runCommand("tp " + player + " " + located.getX() + " 200 " + located.getZ());
-		world.getConnection().waitForChunksRender();
+		for (CampSurvey.Camp camp : survey.camps()) {
+			check(WildfrontStructures.ABANDONED_CAMP_LAYOUTS.contains(camp.layout()), "unexpected camp layout " + camp.layout() + " at " + camp.start().toShortString());
+		}
 
-		BlockPos campfire = server.computeOnServer(s -> findCampfire(s.overworld(), located));
-		check(campfire != null, "the camp located at " + located.toShortString() + " should have generated its campfire");
+		for (Identifier layout : WildfrontStructures.ABANDONED_CAMP_LAYOUTS) {
+			check(survey.countByLayout().get(layout) > 0, "world generation never chose layout " + layout + " among " + survey.camps().size()
+					+ " camps: " + survey.countByLayout());
+		}
 
-		boolean hasLootChest = server.computeOnServer(s -> BlockPos.betweenClosedStream(campfire.offset(-6, -1, -6), campfire.offset(6, 2, 6))
-				.anyMatch(pos -> s.overworld().getBlockEntity(pos) instanceof ChestBlockEntity chest
-						&& WildfrontLootTables.ABANDONED_CAMP.equals(chest.getLootTable())));
-		check(hasLootChest, "the generated camp should contain its loot chest");
+		List<BlockPos> visited = new ArrayList<>();
 
-		int offGround = server.computeOnServer(s -> heightAboveGround(s.overworld(), campfire));
-		check(Math.abs(offGround) <= 1, "the camp should stand at ground level, but its campfire is " + offGround + " block(s) off");
-		int spread = server.computeOnServer(s -> terrainSpread(s.overworld(), located));
-		check(spread <= 3, "camps should only generate on roughly level ground, but the terrain around this one varies by " + spread + " blocks");
-		System.out.println("[WildfrontClientGameTest] natural abandoned camp at " + campfire.toShortString() + ", terrain varies by " + spread + " block(s), campfire " + offGround + " block(s) off ground level");
-		lookAt(context, world, player, campfire);
-		takeWorldScreenshot(context, "1_abandoned_camp");
-		server.runCommand("tp " + player + " " + (campfire.getX() + 7.5) + " " + (campfire.getY() + 4) + " " + (campfire.getZ() + 7.5) + " 135 25");
-		context.waitTicks(20);
-		takeWorldScreenshot(context, "1_abandoned_camp_from_south_east");
+		for (Identifier layout : WildfrontStructures.ABANDONED_CAMP_LAYOUTS) {
+			BlockPos located = survey.firstWithLayout(layout).start();
+			String name = layout.getPath().substring(layout.getPath().lastIndexOf('/') + 1);
+
+			server.runCommand("gamemode spectator " + player);
+			server.runCommand("tp " + player + " " + located.getX() + " 200 " + located.getZ());
+			world.getConnection().waitForChunksRender();
+
+			BlockPos campfire = server.computeOnServer(s -> findCampfire(s.overworld(), located));
+			check(campfire != null, "the " + name + " camp at " + located.toShortString() + " should have generated its campfire");
+
+			boolean hasLootChest = server.computeOnServer(s -> BlockPos.betweenClosedStream(campfire.offset(-6, -1, -6), campfire.offset(6, 2, 6))
+					.anyMatch(pos -> s.overworld().getBlockEntity(pos) instanceof ChestBlockEntity chest
+							&& WildfrontLootTables.ABANDONED_CAMP.equals(chest.getLootTable())));
+			check(hasLootChest, "the generated " + name + " camp should contain its loot chest");
+
+			// What was built must be the layout world generation announced. Three layouts have a
+			// block no other has; the cart is the only one whose chest stands above the ground.
+			int chestHeight = server.computeOnServer(s -> BlockPos.betweenClosedStream(campfire.offset(-6, -1, -6), campfire.offset(6, 2, 6))
+					.filter(pos -> s.overworld().getBlockEntity(pos) instanceof ChestBlockEntity).mapToInt(pos -> pos.getY() - campfire.getY()).max().orElse(-1));
+
+			if (SIGNATURE_BLOCKS.containsKey(name)) {
+				boolean hasSignature = server.computeOnServer(s -> BlockPos.betweenClosedStream(campfire.offset(-6, -1, -6), campfire.offset(6, 3, 6))
+						.anyMatch(pos -> s.overworld().getBlockState(pos).is(SIGNATURE_BLOCKS.get(name))));
+				check(hasSignature, "the camp world generation announced as " + name + " should contain " + SIGNATURE_BLOCKS.get(name));
+				check(chestHeight == 0, "the chest of the " + name + " camp should stand on the ground, but is " + chestHeight + " block(s) above the campfire");
+			} else {
+				check(chestHeight == 2, "the chest of the " + name + " camp should ride on the cart, 2 blocks above the campfire, but is " + chestHeight + " above");
+			}
+
+			int offGround = server.computeOnServer(s -> heightAboveGround(s.overworld(), campfire));
+			check(Math.abs(offGround) <= 1, "the " + name + " camp should stand at ground level, but its campfire is " + offGround + " block(s) off");
+			int spread = server.computeOnServer(s -> terrainSpread(s.overworld(), located));
+			check(spread <= 3, "camps should only generate on roughly level ground, but the terrain around the " + name + " camp varies by " + spread + " blocks");
+			System.out.println("[WildfrontClientGameTest] natural " + name + " camp at " + campfire.toShortString() + ", terrain varies by " + spread
+					+ " block(s), campfire " + offGround + " block(s) off ground level");
+
+			server.runCommand("tp " + player + " " + (campfire.getX() + 8.5) + " " + (campfire.getY() + 6) + " " + (campfire.getZ() + 8.5) + " 135 35");
+			world.getConnection().waitForChunksRender();
+			takeWorldScreenshot(context, "1_natural_" + name);
+			visited.add(campfire);
+		}
+
+		return visited;
 	}
 
 	/**
 	 * Builds every camp layout on a dry, level, open patch of the terrain and takes a picture of
 	 * each, so a change to a layout can be looked at without hunting for it in the world.
 	 */
-	private static void layoutGallery(ClientGameTestContext context, TestSingleplayerContext world, String player) {
+	private static void layoutGallery(ClientGameTestContext context, TestSingleplayerContext world, String player, List<BlockPos> around) {
 		TestServerContext server = world.getServer();
-		List<BlockPos> sites = server.computeOnServer(s -> findGallerySites(s.overworld(),
-				s.getPlayerList().getPlayers().get(0).blockPosition(), WildfrontStructures.ABANDONED_CAMP_LAYOUTS.size()));
-		check(sites.size() == WildfrontStructures.ABANDONED_CAMP_LAYOUTS.size(),
-				"expected to find a level patch of ground for every layout near the camp, but found " + sites.size());
+		List<BlockPos> sites = List.of();
+
+		// Open, level grass is not guaranteed anywhere; look around each camp that was visited.
+		for (BlockPos center : around) {
+			server.runCommand("tp " + player + " " + center.getX() + " " + (center.getY() + 20) + " " + center.getZ());
+			world.getConnection().waitForChunksRender();
+			sites = server.computeOnServer(s -> findGallerySites(s.overworld(), center, WildfrontStructures.ABANDONED_CAMP_LAYOUTS.size()));
+
+			if (sites.size() == WildfrontStructures.ABANDONED_CAMP_LAYOUTS.size()) {
+				break;
+			}
+		}
+
+		if (sites.size() != WildfrontStructures.ABANDONED_CAMP_LAYOUTS.size()) {
+			System.out.println("[WildfrontClientGameTest] layout gallery skipped: no open, level ground for every layout near the visited camps");
+			return;
+		}
 
 		for (int i = 0; i < sites.size(); i++) {
 			Identifier layout = WildfrontStructures.ABANDONED_CAMP_LAYOUTS.get(i);

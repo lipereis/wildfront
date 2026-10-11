@@ -71,7 +71,7 @@ Runs the unit tests and the headless in-world game tests, and writes the release
 |---------|--------------|-----------------|
 | `.\gradlew.bat test` | Unit tests for logic that needs no world: scheduling, cooldowns, config validation, directions | yes |
 | `.\gradlew.bat runGameTest` | Game tests on a headless server: caches, loot, expiry, site selection, the automatic event check with several players, commands, camp data and generation, and a timing check of the timer-driven code. Ends with `All N required tests passed` | yes |
-| `.\gradlew.bat runClientGameTest` | Opens a real game window, creates a normally generated world, finds a naturally generated camp, triggers the event by command and waits for it to trigger on its own. Writes screenshots to `build/run/clientGameTest/screenshots` | no |
+| `.\gradlew.bat runClientGameTest` | Opens a real game window, creates a normally generated world, surveys where camps will generate and checks that every layout occurs, visits a naturally generated camp of each layout, builds all layouts side by side, triggers the event by command and waits for it to trigger on its own. Prints the survey as `survey: N camps at M candidate spots ..., by layout: ...`. Writes screenshots to `build/run/clientGameTest/screenshots` | no |
 | `.\gradlew.bat runClientGameTest "-Pwildfront.acceptMinecraftEula=true"` | The same, followed by a dedicated-server test: starts a real dedicated server on localhost, connects the client to it and checks command permissions, a forced and an automatic event, finding and expiry of a cache, and a naturally generated camp. Without the flag this part reports `SKIPPED` | no |
 | `.\gradlew.bat runProductionClient` | Starts a non-development client with the release jar, as a player would run it. Close the window to end it | no |
 
@@ -229,9 +229,11 @@ layouts, turned in a random direction:
 | ![Lean-to layout](docs/images/camp_layout_camp.png) | ![Tent layout](docs/images/camp_layout_tent.png) | ![Cart layout](docs/images/camp_layout_cart.png) | ![Ruin layout](docs/images/camp_layout_ruin.png) |
 
 - Generates on the surface in forests, taigas, savannas, plains, sunflower plains, meadows and
-  snowy plains. Candidate spots are about 380 blocks apart in those biomes (spacing 24 chunks,
-  separation 10); a camp only appears at a candidate where the ground is dry and roughly level,
-  so hilly or watery regions have fewer.
+  snowy plains. Candidate spots are about 380 blocks apart (spacing 24 chunks, separation 10); a
+  camp only appears at a candidate that lies in one of those biomes and where the ground is dry
+  and roughly level. In the one world measured (seed `wildfront`, 361 candidate spots around
+  spawn) 41 spots, or 11%, got a camp: about one camp per 1,100 by 1,100 blocks. Other worlds
+  will differ.
 - **Only in chunks generated after the mod was added.** Existing terrain is never changed.
 - Find one with `/locate structure wildfront:abandoned_camp`; build one anywhere with
   `/place structure wildfront:abandoned_camp`.

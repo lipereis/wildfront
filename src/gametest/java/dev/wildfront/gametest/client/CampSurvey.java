@@ -9,10 +9,14 @@ import dev.wildfront.registry.WildfrontStructures;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
+import net.minecraft.core.QuartPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.BiomeTags;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.biome.BiomeResolver;
 import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.levelgen.structure.PoolElementStructurePiece;
@@ -29,10 +33,11 @@ import net.minecraft.world.level.levelgen.structure.pools.SinglePoolElement;
  */
 final class CampSurvey {
 	/**
-	 * @param start  position of the camp's piece, at its north-west corner before rotation
-	 * @param layout id of the template world generation picked for it
+	 * @param start    position of the camp's piece, at its north-west corner before rotation
+	 * @param layout   id of the template world generation picked for it
+	 * @param wooded   whether the camp lies in a forest or taiga biome, where trees are dense
 	 */
-	record Camp(BlockPos start, Identifier layout) {
+	record Camp(BlockPos start, Identifier layout, boolean wooded) {
 	}
 
 	/**
@@ -70,6 +75,7 @@ final class CampSurvey {
 		Holder<Structure> holder = level.registryAccess().lookupOrThrow(Registries.STRUCTURE).get(WildfrontStructures.ABANDONED_CAMP).orElseThrow();
 		ChunkGeneratorStructureState state = level.getChunkSource().getGeneratorState();
 		RandomSpreadStructurePlacement placement = (RandomSpreadStructurePlacement) state.getPlacementsForStructure(holder).get(0);
+		BiomeResolver biomes = level.getChunkSource().getGenerator().getBiomeSource().createUncachedResolver(state.randomState());
 		int spacing = placement.spacing();
 		int centerRegionX = Math.floorDiv(center.getX() >> 4, spacing);
 		int centerRegionZ = Math.floorDiv(center.getZ() >> 4, spacing);
@@ -95,7 +101,10 @@ final class CampSurvey {
 
 					for (StructurePiece piece : start.getPieces()) {
 						if (piece instanceof PoolElementStructurePiece poolPiece && poolPiece.getElement() instanceof SinglePoolElement element) {
-							camps.add(new Camp(poolPiece.getPosition(), element.getTemplateLocation()));
+							BlockPos position = poolPiece.getPosition();
+							Holder<Biome> biome = biomes.getNoiseBiome(
+									QuartPos.fromBlock(position.getX()), QuartPos.fromBlock(position.getY()), QuartPos.fromBlock(position.getZ()));
+							camps.add(new Camp(position, element.getTemplateLocation(), biome.is(BiomeTags.IS_FOREST) || biome.is(BiomeTags.IS_TAIGA)));
 						}
 					}
 				}

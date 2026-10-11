@@ -13,6 +13,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CampfireBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
@@ -53,7 +54,7 @@ public class AbandonedCampGameTest {
 		helper.assertTrue(template.placeInWorld(level, origin, origin, new StructurePlaceSettings(), level.getRandom(), 2),
 				"template should be placed");
 
-		helper.assertBlockPresent(Blocks.COARSE_DIRT, 3, 0, 3);
+		helper.assertBlockPresent(Blocks.PACKED_MUD, 3, 0, 3);
 		helper.assertBlockPresent(Blocks.CAMPFIRE, 3, 1, 3);
 		helper.assertFalse(level.getBlockState(helper.absolutePos(new BlockPos(3, 1, 3))).getValue(CampfireBlock.LIT), "the campfire should be cold");
 		helper.assertBlockPresent(Blocks.SPRUCE_FENCE, 0, 1, 4);
@@ -106,7 +107,7 @@ public class AbandonedCampGameTest {
 					campfires++;
 					helper.assertFalse(state.getValue(CampfireBlock.LIT), "the campfire of " + id + " should be cold");
 					helper.assertTrue(pos.getY() == origin.getY() + 1, "the campfire of " + id + " should stand on the ground layer");
-					helper.assertTrue(level.getBlockState(pos.below()).is(Blocks.COARSE_DIRT), "the campfire of " + id + " should stand on coarse dirt");
+					helper.assertTrue(level.getBlockState(pos.below()).is(Blocks.PACKED_MUD), "the campfire of " + id + " should stand on packed mud");
 				}
 
 				if (level.getBlockEntity(pos) instanceof ChestBlockEntity chest && WildfrontLootTables.ABANDONED_CAMP.equals(chest.getLootTable())) {
@@ -119,6 +120,8 @@ public class AbandonedCampGameTest {
 
 				if (pos.getY() == origin.getY() && !state.isAir()) {
 					groundBlocks++;
+					helper.assertFalse(state.is(BlockTags.SUPPORTS_VEGETATION), "the ground of " + id + " contains " + state.getBlock()
+							+ ", which trees can take root in");
 				}
 			}
 
@@ -186,7 +189,7 @@ public class AbandonedCampGameTest {
 		}
 
 		helper.assertTrue(chest != null, "the generated camp should contain its loot chest");
-		helper.assertTrue(level.getBlockState(campfire.below()).is(Blocks.COARSE_DIRT), "the camp's ground layer should be under the campfire");
+		helper.assertTrue(level.getBlockState(campfire.below()).is(Blocks.PACKED_MUD), "the camp's ground layer should be under the campfire");
 		helper.assertFalse(level.getBlockState(campfire.below(2)).isAir(), "the camp should rest on the terrain, not float above it");
 		// The chunk corner can lie under a neighbouring test area, whose frame of barriers and
 		// control block is not terrain.

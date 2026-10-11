@@ -4,7 +4,7 @@ A Minecraft Java Edition mod (Fabric) about dynamic exploration: rare world even
 discoveries and abandoned places that make the world feel unpredictable and alive, without
 replacing vanilla survival.
 
-**Version 0.2.0** for Minecraft 26.3 (Fabric). It adds:
+**Version 0.2.1** for Minecraft 26.3 (Fabric). It adds:
 
 - **Mysterious Discovery**, a dynamic event: a forgotten cache appears near a player who is out
   exploring, the player is told which way to look, and whoever opens it is rewarded.
@@ -20,7 +20,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full list of features and known limitat
 ## Installing
 
 1. Install [Fabric Loader](https://fabricmc.net/use/) 0.19.5 or newer for Minecraft 26.3.
-2. Download `wildfront-0.2.0+mc26.3.jar` from the
+2. Download `wildfront-0.2.1+mc26.3.jar` from the
    [latest release](https://github.com/lipereis/wildfront/releases/latest) (not the `-sources` file).
 3. Put it and [Fabric API](https://modrinth.com/mod/fabric-api) in the `mods` folder of the game
    directory that your Fabric installation uses.
@@ -105,7 +105,7 @@ To confirm the mod loaded, look for these lines in the console or in `run/logs/l
 
 ```
 [Wildfront] Registered 1 event(s): [mysterious_discovery]
-[Wildfront] Initialized (version 0.2.0+mc26.3, environment CLIENT)
+[Wildfront] Initialized (version 0.2.1+mc26.3, environment CLIENT)
 [Wildfront] Client initialized
 ```
 
@@ -229,11 +229,13 @@ layouts, turned in a random direction:
 | ![Lean-to layout](docs/images/camp_layout_camp.png) | ![Tent layout](docs/images/camp_layout_tent.png) | ![Cart layout](docs/images/camp_layout_cart.png) | ![Ruin layout](docs/images/camp_layout_ruin.png) |
 
 - Generates on the surface in forests, taigas, savannas, plains, sunflower plains, meadows and
-  snowy plains. Candidate spots are about 380 blocks apart (spacing 24 chunks, separation 10); a
+  snowy plains. Candidate spots are about 190 blocks apart (spacing 12 chunks, separation 5); a
   camp only appears at a candidate that lies in one of those biomes and where the ground is dry
-  and roughly level. In the one world measured (seed `wildfront`, 361 candidate spots around
-  spawn) 41 spots, or 11%, got a camp: about one camp per 1,100 by 1,100 blocks. Other worlds
-  will differ.
+  and roughly level. In the one world measured (seed `wildfront`, 529 candidate spots around
+  spawn) 48 spots, or 9%, got a camp: about one camp per 640 by 640 blocks. Other worlds will
+  differ.
+- The ground of a camp is packed mud, gravel and stone, on which nothing grows: trees stand
+  beside a camp and may shade it, but none takes root in the middle of it.
 - **Only in chunks generated after the mod was added.** Existing terrain is never changed.
 - Find one with `/locate structure wildfront:abandoned_camp`; build one anywhere with
   `/place structure wildfront:abandoned_camp`.
@@ -275,7 +277,7 @@ python tools/generate_structures.py
 To add a layout: write a function for it in the script and add it to `LAYOUTS`, add its template
 to `worldgen/template_pool/abandoned_camp/start.json` with a weight, and add its id to
 `ABANDONED_CAMP_LAYOUTS` in `WildfrontStructures.java`. A layout must be 7 x 4 x 7 and contain
-exactly one unlit campfire standing on coarse dirt and exactly one chest with the camp loot table;
+exactly one unlit campfire standing on packed mud and exactly one chest with the camp loot table;
 the game test `everyLayoutHasACampfireAndOneLootChest` checks this for every listed layout.
 `.\gradlew.bat runClientGameTest` builds all layouts side by side on open ground and saves a
 picture of each as `..._layout_<name>.png`.
@@ -368,8 +370,8 @@ docs/images/           screenshots taken by the client game test
 5. Commit, push and wait for the build workflow to pass. Then tag and push the tag:
 
    ```
-   git tag v0.2.0
-   git push origin v0.2.0
+   git tag v0.2.1
+   git push origin v0.2.1
    ```
 
    The release workflow builds the tagged commit, runs the tests, and publishes a GitHub release

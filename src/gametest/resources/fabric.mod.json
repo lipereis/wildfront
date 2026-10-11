@@ -8,7 +8,8 @@
 		"fabric-gametest": [
 			"dev.wildfront.gametest.WildfrontGameTest",
 			"dev.wildfront.gametest.AbandonedCampGameTest",
-			"dev.wildfront.gametest.EventSystemGameTest"
+			"dev.wildfront.gametest.EventSystemGameTest",
+			"dev.wildfront.gametest.LootGameTest"
 		],
 		"fabric-client-gametest": [
 			"dev.wildfront.gametest.client.WildfrontClientGameTest",

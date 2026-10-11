@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import dev.wildfront.config.ConfigManager;
 import dev.wildfront.discovery.ActiveCache;
@@ -22,11 +23,15 @@ import net.fabricmc.loader.api.FabricLoader;
 
 import net.minecraft.client.gui.screens.worldselection.WorldCreationUiState;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.RotatedPillarBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 
 /**
@@ -46,6 +51,12 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 	 */
 	private static final int SURVEY_ENOUGH_CAMPS = 40;
 	private static final int SURVEY_MAX_CANDIDATES = 1200;
+	private static final int WOODED_CAMPS_TO_VISIT = 6;
+
+	/**
+	 * The blocks a camp's ground layer is made of.
+	 */
+	private static final Set<Block> CAMP_GROUND = Set.of(Blocks.PACKED_MUD, Blocks.GRAVEL, Blocks.MOSSY_COBBLESTONE, Blocks.COBBLESTONE);
 
 	/**
 	 * A block that only this layout contains, by the layout's short name. The cart layout has none
@@ -74,6 +85,7 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 			server.runCommand("gamerule advance_time false");
 
 			List<BlockPos> visited = naturallyGeneratedCamps(context, world, player);
+			campsAmongTrees(world, player);
 			layoutGallery(context, world, player, visited);
 			forcedEvent(context, world, player);
 			automaticEvent(context, world, player);
@@ -150,6 +162,54 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 		}
 
 		return visited;
+	}
+
+	/**
+	 * Visits camps in forest and taiga biomes and checks that no tree took root on a camp's own
+	 * ground. Trees beside a camp, and their leaves over it, are fine; a trunk standing in the
+	 * middle of it is not.
+	 */
+	private static void campsAmongTrees(TestSingleplayerContext world, String player) {
+		TestServerContext server = world.getServer();
+		CampSurvey.Result survey = server.computeOnServer(s -> CampSurvey.run(s.overworld(),
+				s.getPlayerList().getPlayers().get(0).blockPosition(), SURVEY_ENOUGH_CAMPS, SURVEY_MAX_CANDIDATES));
+		List<CampSurvey.Camp> wooded = survey.camps().stream().filter(CampSurvey.Camp::wooded).limit(WOODED_CAMPS_TO_VISIT).toList();
+		check(!wooded.isEmpty(), "expected at least one camp in a forest or taiga among " + survey.camps().size() + " camps");
+		int rooted = 0;
+
+		for (CampSurvey.Camp camp : wooded) {
+			BlockPos located = camp.start();
+			server.runCommand("gamemode spectator " + player);
+			server.runCommand("tp " + player + " " + located.getX() + " 200 " + located.getZ());
+			world.getConnection().waitForChunksRender();
+
+			BlockPos campfire = server.computeOnServer(s -> findCampfire(s.overworld(), located));
+			check(campfire != null, "the camp at " + located.toShortString() + " should have generated its campfire");
+			int trunks = server.computeOnServer(s -> trunksRootedOnCampGround(s.overworld(), campfire));
+			System.out.println("[WildfrontClientGameTest] wooded camp at " + campfire.toShortString() + ": " + trunks + " tree trunk(s) rooted on its ground");
+			rooted += trunks;
+		}
+
+		check(rooted == 0, rooted + " tree trunk(s) took root on the ground of " + wooded.size() + " camps in wooded biomes");
+	}
+
+	/**
+	 * Counts upright logs standing directly on a block of a camp's ground layer. The logs a camp
+	 * itself contains lie on their side, so an upright one is a tree.
+	 */
+	private static int trunksRootedOnCampGround(ServerLevel level, BlockPos campfire) {
+		int trunks = 0;
+
+		for (BlockPos ground : BlockPos.betweenClosed(campfire.offset(-6, -1, -6), campfire.offset(6, -1, 6))) {
+			BlockState above = level.getBlockState(ground.above());
+
+			if (CAMP_GROUND.contains(level.getBlockState(ground).getBlock()) && above.is(BlockTags.LOGS)
+					&& above.hasProperty(RotatedPillarBlock.AXIS) && above.getValue(RotatedPillarBlock.AXIS) == Direction.Axis.Y) {
+				trunks++;
+			}
+		}
+
+		return trunks;
 	}
 
 	/**

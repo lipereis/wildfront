@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.2.1
+
+### Changed
+
+- **Abandoned camps are about three times as common.** Candidate spots are now 12 chunks apart
+  instead of 24. In the test world that is roughly one camp per 640 by 640 blocks, up from one
+  per 1,100 by 1,100.
+
+### Fixed
+
+- **Trees no longer grow in the middle of a camp.** The camp's ground was coarse dirt, which
+  trees can take root in, so in forests a trunk often stood between the fire and the chest. The
+  ground is now packed mud. Trees still grow right beside camps.
+
+- **Loot now comes in the amounts it was meant to.** The loot tables were written in the format
+  of older Minecraft versions; 26.3 still loaded them but silently dropped the part that sets
+  stack sizes, enchants books and wears tools. Since 0.1.0 every entry therefore gave a single
+  item, "enchanted books" were plain books and tools were as new. Caches and camp chests now
+  give, for example, 2 to 6 iron ingots, real enchanted books and worn tools. Containers that
+  were already opened keep what they had.
+
+The camp changes affect newly generated chunks only.
+
 ## 0.2.0
 
 ### Added

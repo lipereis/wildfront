@@ -104,7 +104,10 @@ class Template:
 
 SIZE = (7, 4, 7)
 LOOT_CHEST = {"id": "minecraft:chest", "LootTable": "wildfront:structure/abandoned_camp"}
-GROUND = {"c": "minecraft:coarse_dirt", "g": "minecraft:gravel", "m": "minecraft:mossy_cobblestone", "s": "minecraft:cobblestone"}
+# None of these may be a block that vegetation grows on (dirt, coarse dirt, grass, podzol, mud,
+# moss: the game's `supports_vegetation` block tag). World generation plants trees after
+# structures, and on such a block a tree takes root in the middle of the camp.
+GROUND = {"c": "minecraft:packed_mud", "g": "minecraft:gravel", "m": "minecraft:mossy_cobblestone", "s": "minecraft:cobblestone"}
 
 
 def new_layout(ground):

@@ -25,7 +25,9 @@ import net.minecraft.world.level.levelgen.structure.structures.JigsawStructure;
  * <li>{@code check_radius}: half the side of the square, centred on the structure's start, that
  * is sampled at nine points;</li>
  * <li>{@code max_height_difference}: the largest allowed difference between the highest and the
- * lowest sampled surface height.</li>
+ * lowest sampled surface height;</li>
+ * <li>{@code min_distance_from_origin} (optional, default 0): the structure does not generate
+ * closer than this many blocks to the world origin, around which players start.</li>
  * </ul>
  *
  * <p>The check costs eighteen height lookups, and only for the few chunks the structure's
@@ -35,22 +37,32 @@ public final class FlatGroundJigsawStructure extends Structure {
 	public static final MapCodec<FlatGroundJigsawStructure> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 			JigsawStructure.CODEC.forGetter(structure -> structure.jigsaw),
 			Codec.intRange(1, 32).fieldOf("check_radius").forGetter(structure -> structure.checkRadius),
-			Codec.intRange(0, 64).fieldOf("max_height_difference").forGetter(structure -> structure.maxHeightDifference)
+			Codec.intRange(0, 64).fieldOf("max_height_difference").forGetter(structure -> structure.maxHeightDifference),
+			Codec.intRange(0, 100_000).optionalFieldOf("min_distance_from_origin", 0).forGetter(structure -> structure.minDistanceFromOrigin)
 	).apply(instance, FlatGroundJigsawStructure::new));
 
 	private final JigsawStructure jigsaw;
 	private final int checkRadius;
 	private final int maxHeightDifference;
+	private final int minDistanceFromOrigin;
 
-	public FlatGroundJigsawStructure(JigsawStructure jigsaw, int checkRadius, int maxHeightDifference) {
+	public FlatGroundJigsawStructure(JigsawStructure jigsaw, int checkRadius, int maxHeightDifference, int minDistanceFromOrigin) {
 		super(new StructureSettings(jigsaw.biomes(), jigsaw.spawnOverrides(), jigsaw.step(), jigsaw.terrainAdaptation()));
 		this.jigsaw = jigsaw;
 		this.checkRadius = checkRadius;
 		this.maxHeightDifference = maxHeightDifference;
+		this.minDistanceFromOrigin = minDistanceFromOrigin;
 	}
 
 	@Override
 	protected Optional<GenerationStub> findGenerationPoint(GenerationContext context) {
+		int startX = context.chunkPos().getMinBlockX();
+		int startZ = context.chunkPos().getMinBlockZ();
+
+		if (!HeightSpread.isFarEnough(startX, startZ, minDistanceFromOrigin)) {
+			return Optional.empty();
+		}
+
 		// Jigsaw structures start at the north-west corner of their chunk.
 		if (!isDryAndLevel(context, context.chunkPos().getMinBlockX(), context.chunkPos().getMinBlockZ(), checkRadius, maxHeightDifference)) {
 			return Optional.empty();

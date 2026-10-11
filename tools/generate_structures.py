@@ -110,16 +110,16 @@ LOOT_CHEST = {"id": "minecraft:chest", "LootTable": "wildfront:structure/abandon
 GROUND = {"c": "minecraft:packed_mud", "g": "minecraft:gravel", "m": "minecraft:mossy_cobblestone", "s": "minecraft:cobblestone"}
 
 
-def new_layout(ground):
-    """Starts a 7 x 4 x 7 camp layout from its ground layer.
+def new_layout(ground, size=SIZE):
+    """Starts a camp layout (7 x 4 x 7 unless `size` says otherwise) from its ground layer.
 
     Layer y = 0 replaces the top block of the terrain; everything else stands on it. `ground` is
-    seven rows (north to south) of seven cells (west to east); a space keeps the terrain.
+    one row per block north to south, one cell per block west to east; a space keeps the terrain.
 
-    Every layout must contain one unlit campfire and one chest with the camp loot table: the game
-    tests look for both to find a camp and to check that it generated.
+    Every abandoned camp layout must contain one unlit campfire and one chest with the camp loot
+    table: the game tests look for both to find a camp and to check that it generated.
     """
-    layout = Template(SIZE)
+    layout = Template(size)
     for z, row in enumerate(ground):
         for x, cell in enumerate(row):
             if cell != " ":
@@ -256,7 +256,68 @@ def ruin():
     camp.write(OUTPUT / "abandoned_camp" / "ruin.nbt")
 
 
-LAYOUTS = (lean_to, tent, cart, ruin)
+BANDIT_SIZE = (9, 5, 9)
+BANDIT_CHEST = {"id": "minecraft:chest", "LootTable": "wildfront:camp/bandit_small"}
+
+
+def bandit_small():
+    """A small occupied camp: a burning fire between two tents, a palisade, a practice target.
+
+    9 x 5 x 9. Unlike an abandoned camp the fire is lit: smoke and light give the camp away from a
+    distance. Its guards are not part of the template; the mod spawns them when a player comes
+    near. A bandit camp layout must contain one lit campfire in its middle, one chest with the
+    bandit loot table and one target block, which is how the game tests recognise it.
+    """
+    camp = new_layout([
+        "  ccccc  ",
+        " ccgcccc ",
+        "ccccccccc",
+        "cccccgccc",
+        "ccccccccc",
+        "ccgcccccc",
+        "ccccccgcc",
+        " ccccccc ",
+        "  ccccc  ",
+    ], BANDIT_SIZE)
+
+    camp.set(4, 1, 4, "minecraft:campfire", lit="true")
+
+    # Tent in the north-west, open to the south; tent in the south-east, open to the north.
+    for z in (1, 2, 3):
+        camp.set(1, 1, z, "minecraft:brown_wool")
+        camp.set(3, 1, z, "minecraft:brown_wool")
+        camp.set(2, 2, z, "minecraft:brown_wool")
+    camp.set(2, 1, 1, "minecraft:brown_wool")
+    camp.set(2, 1, 2, "minecraft:hay_block", axis="z")
+    for z in (5, 6, 7):
+        camp.set(5, 1, z, "minecraft:brown_wool")
+        camp.set(7, 1, z, "minecraft:brown_wool")
+        camp.set(6, 2, z, "minecraft:brown_wool")
+    camp.set(6, 1, 7, "minecraft:brown_wool")
+    camp.set(6, 1, 6, "minecraft:hay_block", axis="z")
+
+    # Palisade of upright logs along the west side and the north-east corner, with gaps to walk through.
+    for x, z in ((0, 3), (0, 4), (0, 5), (5, 0), (6, 0), (8, 2), (8, 3)):
+        camp.set(x, 1, z, "minecraft:spruce_log", axis="y")
+        camp.set(x, 2, z, "minecraft:spruce_log", axis="y")
+    camp.set(0, 3, 4, "minecraft:spruce_log", axis="y")
+    camp.set(6, 3, 0, "minecraft:spruce_log", axis="y")
+
+    # Stores by the north-east tent side: the loot chest and a barrel; a lantern on a post.
+    camp.set(6, 1, 2, "minecraft:chest", nbt=BANDIT_CHEST, facing="south")
+    camp.set(5, 1, 2, "minecraft:barrel", facing="up")
+    camp.set(7, 1, 1, "minecraft:spruce_fence")
+    camp.set(7, 2, 1, "minecraft:lantern", hanging="false")
+
+    # Practice corner in the south-west: a target on a bale, a log seat by the fire.
+    camp.set(1, 1, 7, "minecraft:hay_block", axis="y")
+    camp.set(1, 2, 7, "minecraft:target")
+    camp.set(2, 1, 5, "minecraft:spruce_log", axis="x")
+
+    camp.write(OUTPUT / "bandit_camp" / "small_1.nbt")
+
+
+LAYOUTS = (lean_to, tent, cart, ruin, bandit_small)
 
 if __name__ == "__main__":
     for layout in LAYOUTS:

@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.Random;
 
 import dev.wildfront.Wildfront;
+import dev.wildfront.camp.CampManager;
 import dev.wildfront.config.ConfigManager;
 import dev.wildfront.config.EventConfig;
 import dev.wildfront.config.WildfrontConfig;
@@ -64,6 +65,8 @@ public final class EventManager {
 		if (!isEligible(player)) {
 			return;
 		}
+
+		CampManager.onPlayerCheck(player, now, config.hostileCamps());
 
 		PlayerCooldowns cooldowns = new PlayerCooldowns(player);
 		long globalCooldown = EventSettings.ticks(config.globalCooldownSeconds());

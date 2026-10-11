@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import dev.wildfront.camp.CampManager;
+import dev.wildfront.camp.CampState;
 import dev.wildfront.config.ConfigManager;
 import dev.wildfront.discovery.ActiveCache;
 import dev.wildfront.discovery.DiscoveryManager;
@@ -27,11 +29,14 @@ import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CampfireBlock;
 import net.minecraft.world.level.block.RotatedPillarBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.entity.EntityTypeTest;
 import net.minecraft.world.level.levelgen.Heightmap;
 
 /**
@@ -52,6 +57,7 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 	private static final int SURVEY_ENOUGH_CAMPS = 40;
 	private static final int SURVEY_MAX_CANDIDATES = 1200;
 	private static final int WOODED_CAMPS_TO_VISIT = 6;
+	private static final int BANDIT_SURVEY_ENOUGH_CAMPS = 10;
 
 	/**
 	 * The blocks a camp's ground layer is made of.
@@ -86,6 +92,7 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 
 			List<BlockPos> visited = naturallyGeneratedCamps(context, world, player);
 			campsAmongTrees(world, player);
+			occupiedBanditCamp(context, world, player);
 			layoutGallery(context, world, player, visited);
 			forcedEvent(context, world, player);
 			automaticEvent(context, world, player);
@@ -101,7 +108,8 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 	private static List<BlockPos> naturallyGeneratedCamps(ClientGameTestContext context, TestSingleplayerContext world, String player) {
 		TestServerContext server = world.getServer();
 		CampSurvey.Result survey = server.computeOnServer(s -> CampSurvey.run(s.overworld(),
-				s.getPlayerList().getPlayers().get(0).blockPosition(), SURVEY_ENOUGH_CAMPS, SURVEY_MAX_CANDIDATES));
+				s.getPlayerList().getPlayers().get(0).blockPosition(), WildfrontStructures.ABANDONED_CAMP, WildfrontStructures.ABANDONED_CAMP_LAYOUTS,
+				SURVEY_ENOUGH_CAMPS, SURVEY_MAX_CANDIDATES));
 		System.out.println("[WildfrontClientGameTest] survey: " + survey.camps().size() + " camps at " + survey.candidates()
 				+ " candidate spots (" + Math.round(100.0 * survey.camps().size() / survey.candidates()) + "%), by layout: " + survey.countByLayout());
 
@@ -172,7 +180,8 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 	private static void campsAmongTrees(TestSingleplayerContext world, String player) {
 		TestServerContext server = world.getServer();
 		CampSurvey.Result survey = server.computeOnServer(s -> CampSurvey.run(s.overworld(),
-				s.getPlayerList().getPlayers().get(0).blockPosition(), SURVEY_ENOUGH_CAMPS, SURVEY_MAX_CANDIDATES));
+				s.getPlayerList().getPlayers().get(0).blockPosition(), WildfrontStructures.ABANDONED_CAMP, WildfrontStructures.ABANDONED_CAMP_LAYOUTS,
+				SURVEY_ENOUGH_CAMPS, SURVEY_MAX_CANDIDATES));
 		List<CampSurvey.Camp> wooded = survey.camps().stream().filter(CampSurvey.Camp::wooded).limit(WOODED_CAMPS_TO_VISIT).toList();
 		check(!wooded.isEmpty(), "expected at least one camp in a forest or taiga among " + survey.camps().size() + " camps");
 		int rooted = 0;
@@ -213,6 +222,159 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 	}
 
 	/**
+	 * Finds a naturally generated bandit camp, walks a survival player up to it and checks the
+	 * whole life of the camp: guards appear once, are counted as they die, and never come back.
+	 */
+	private static void occupiedBanditCamp(ClientGameTestContext context, TestSingleplayerContext world, String player) {
+		TestServerContext server = world.getServer();
+		CampSurvey.Result survey = server.computeOnServer(s -> CampSurvey.run(s.overworld(), s.getPlayerList().getPlayers().get(0).blockPosition(),
+				WildfrontStructures.BANDIT_CAMP, WildfrontStructures.BANDIT_CAMP_LAYOUTS, BANDIT_SURVEY_ENOUGH_CAMPS, SURVEY_MAX_CANDIDATES));
+		System.out.println("[WildfrontClientGameTest] bandit camp survey: " + survey.camps().size() + " camps at " + survey.candidates()
+				+ " candidate spots (" + Math.round(100.0 * survey.camps().size() / survey.candidates()) + "%)");
+		check(!survey.camps().isEmpty(), "world generation should place bandit camps, but none of " + survey.candidates() + " candidate spots has one");
+
+		for (CampSurvey.Camp camp : survey.camps()) {
+			check((long) camp.start().getX() * camp.start().getX() + (long) camp.start().getZ() * camp.start().getZ() >= 390L * 390L,
+					"bandit camps should keep away from the world origin, but one is at " + camp.start().toShortString());
+		}
+
+		// Prefer a camp in open country: under a forest canopy the picture shows only leaves.
+		CampSurvey.Camp visited = survey.camps().stream().filter(camp -> !camp.wooded()).findFirst().orElse(survey.camps().get(0));
+		System.out.println("[WildfrontClientGameTest] visiting the bandit camp at " + visited.start().toShortString() + (visited.wooded() ? " (wooded)" : " (open country)"));
+		BlockPos located = visited.start();
+		Path config =FabricLoader.getInstance().getConfigDir().resolve(ConfigManager.FILE_NAME);
+		String original;
+
+		try {
+			original = Files.readString(config);
+			// Check players every second; no events, so nothing else happens around the camp.
+			Files.writeString(config, """
+					{ "checkIntervalSeconds": 1, "events": { "mysterious_discovery": { "enabled": false } } }
+					""");
+		} catch (IOException e) {
+			throw new AssertionError("could not write the test config", e);
+		}
+
+		try {
+			server.runCommand("wildfront reload");
+			server.runCommand("difficulty normal");
+			server.runCommand("gamemode spectator " + player);
+			server.runCommand("tp " + player + " " + located.getX() + " 200 " + located.getZ());
+			world.getConnection().waitForChunksRender();
+
+			// A spectator is not a player the mod reacts to: the camp must still be asleep.
+			context.waitTicks(40);
+			check(server.computeOnServer(s -> CampManager.states(s.overworld()).isEmpty()), "a spectator flying over a camp should not wake it");
+
+			BlockPos fire = server.computeOnServer(s -> findBlock(s.overworld(), located, Blocks.CAMPFIRE));
+			check(fire != null, "the bandit camp at " + located.toShortString() + " should have generated its fire");
+			check(server.computeOnServer(s -> s.overworld().getBlockState(fire).getValue(CampfireBlock.LIT)), "the fire of a bandit camp should burn");
+			check(server.computeOnServer(s -> findBlock(s.overworld(), located, Blocks.TARGET)) != null, "the bandit camp should contain its practice target");
+			int offGround = server.computeOnServer(s -> heightAboveGround(s.overworld(), fire));
+			check(Math.abs(offGround) <= 1, "the bandit camp should stand at ground level, but its fire is " + offGround + " block(s) off");
+
+			// Walk up as a survival player; within a second or two the guards must be there.
+			server.runCommand("tp " + player + " " + (fire.getX() + 20.5) + " " + (fire.getY() + 30) + " " + (fire.getZ() + 0.5));
+			server.runCommand("gamemode survival " + player);
+			server.waitFor(s -> !CampManager.states(s.overworld()).isEmpty(), 200);
+			server.runCommand("gamemode spectator " + player);
+
+			CampState occupied = server.computeOnServer(s -> CampManager.states(s.overworld()).get(0));
+			int alive = server.computeOnServer(s -> countGuards(s.overworld()));
+			System.out.println("[WildfrontClientGameTest] bandit camp at " + occupied.center().toShortString() + " occupied by " + occupied.guardsLeft()
+					+ " guard(s), " + alive + " alive, fire " + offGround + " block(s) off ground level");
+			check(occupied.center().closerThan(fire, 3), "the camp's recorded middle " + occupied.center().toShortString() + " should be at its fire " + fire.toShortString());
+			check(occupied.guardsLeft() >= 2 && occupied.guardsLeft() <= 3, "a small camp should have 2 or 3 guards but has " + occupied.guardsLeft());
+			check(alive == occupied.guardsLeft(), "the camp records " + occupied.guardsLeft() + " guard(s) but " + alive + " are alive");
+
+			server.runCommand("tp " + player + " " + (fire.getX() + 9.5) + " " + (fire.getY() + 7) + " " + (fire.getZ() + 9.5) + " 135 35");
+			world.getConnection().waitForChunksRender();
+			takeWorldScreenshot(context, "1_bandit_camp");
+
+			// Ten more checks: nobody new may appear.
+			check(server.computeOnServer(s -> countGuards(s.overworld())) == occupied.guardsLeft(), "no further guards should appear at an occupied camp");
+
+			// Peaceful: the game removes the guards without their dying, and the camp must not
+			// stay recorded as occupied.
+			String above = (fire.getX() + 20.5) + " " + (fire.getY() + 30) + " " + (fire.getZ() + 0.5);
+			server.runCommand("difficulty peaceful");
+			server.runCommand("tp " + player + " " + above);
+			server.runCommand("gamemode survival " + player);
+			server.waitFor(s -> CampManager.states(s.overworld()).isEmpty(), 200);
+			server.runCommand("gamemode spectator " + player);
+			server.waitFor(s -> countGuards(s.overworld()) == 0, 200);
+			System.out.println("[WildfrontClientGameTest] bandit camp stands empty in a peaceful world");
+
+			// Back on normal the camp is occupied again.
+			server.runCommand("difficulty normal");
+			server.runCommand("tp " + player + " " + above);
+			server.runCommand("gamemode survival " + player);
+			server.waitFor(s -> !CampManager.states(s.overworld()).isEmpty(), 200);
+			server.runCommand("gamemode spectator " + player);
+			int back = server.computeOnServer(s -> CampManager.states(s.overworld()).get(0).guardsLeft());
+			check(back >= 2 && back <= 3 && server.computeOnServer(s -> countGuards(s.overworld())) == back,
+					"after peaceful the camp should be occupied by 2 or 3 guards again, but it records " + back);
+			System.out.println("[WildfrontClientGameTest] bandit camp occupied again by " + back + " guard(s) after peaceful");
+
+			server.runCommand("kill @e[tag=" + CampManager.GUARD_TAG + "]");
+			server.waitFor(s -> CampManager.states(s.overworld()).get(0).cleared(), 100);
+
+			// Come back as a survival player: a cleared camp stays empty. Low enough to survive
+			// the fall, as these five seconds are long enough to reach the ground.
+			server.runCommand("tp " + player + " " + (fire.getX() + 9.5) + " " + (fire.getY() + 4) + " " + (fire.getZ() + 9.5));
+			server.runCommand("gamemode survival " + player);
+			context.waitTicks(100);
+			server.runCommand("gamemode spectator " + player);
+			check(server.computeOnServer(s -> countGuards(s.overworld())) == 0, "no guards should come back to a cleared camp");
+			check(server.computeOnServer(s -> CampManager.states(s.overworld()).size()) == 1, "the camp should be recorded exactly once");
+		} finally {
+			try {
+				Files.writeString(config, original);
+			} catch (IOException e) {
+				System.out.println("[WildfrontClientGameTest] could not restore " + config + ": " + e);
+			}
+
+			server.runCommand("kill @e[tag=" + CampManager.GUARD_TAG + "]");
+			server.runCommand("wildfront reload");
+		}
+	}
+
+	/**
+	 * Waits until the server has loaded the terrain around a position the player was just sent to,
+	 * and the client has drawn it. Asking the client alone is not enough: right after a long
+	 * teleport it has nothing left to draw and says it is done.
+	 */
+	private static void waitForTerrain(ClientGameTestContext context, TestSingleplayerContext world, BlockPos around) {
+		world.getServer().waitFor(s -> {
+			for (int dx = -64; dx <= 64; dx += 32) {
+				for (int dz = -64; dz <= 64; dz += 32) {
+					if (!s.overworld().isLoaded(around.offset(dx, 0, dz))) {
+						return false;
+					}
+				}
+			}
+
+			return true;
+		}, 400);
+		world.getConnection().waitForChunksRender();
+		context.waitTicks(10);
+	}
+
+	private static int countGuards(ServerLevel level) {
+		return level.getEntities(EntityTypeTest.forClass(Mob.class), mob -> mob.isAlive() && mob.entityTags().contains(CampManager.GUARD_TAG)).size();
+	}
+
+	private static BlockPos findBlock(ServerLevel level, BlockPos near, Block block) {
+		for (BlockPos pos : BlockPos.betweenClosed(near.getX() - 16, level.getMinY(), near.getZ() - 16, near.getX() + 16, level.getMaxY(), near.getZ() + 16)) {
+			if (level.getBlockState(pos).is(block)) {
+				return pos.immutable();
+			}
+		}
+
+		return null;
+	}
+
+	/**
 	 * Builds every camp layout on a dry, level, open patch of the terrain and takes a picture of
 	 * each, so a change to a layout can be looked at without hunting for it in the world.
 	 */
@@ -223,7 +385,7 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 		// Open, level grass is not guaranteed anywhere; look around each camp that was visited.
 		for (BlockPos center : around) {
 			server.runCommand("tp " + player + " " + center.getX() + " " + (center.getY() + 20) + " " + center.getZ());
-			world.getConnection().waitForChunksRender();
+			waitForTerrain(context, world, center);
 			sites = server.computeOnServer(s -> findGallerySites(s.overworld(), center, WildfrontStructures.ABANDONED_CAMP_LAYOUTS.size()));
 
 			if (sites.size() == WildfrontStructures.ABANDONED_CAMP_LAYOUTS.size()) {
@@ -300,6 +462,8 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 
 	private static void forcedEvent(ClientGameTestContext context, TestSingleplayerContext world, String player) {
 		TestServerContext server = world.getServer();
+		// The event only uses loaded chunks; right after a long teleport there are none yet.
+		waitForTerrain(context, world, server.computeOnServer(s -> s.getPlayerList().getPlayers().get(0).blockPosition()));
 		int before = server.computeOnServer(s -> DiscoveryManager.activeCaches(s.overworld()).size());
 
 		server.runCommand("wildfront event trigger mysterious_discovery " + player);

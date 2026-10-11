@@ -9,6 +9,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import dev.wildfront.Wildfront;
 import dev.wildfront.config.DiscoveryConfig;
 import dev.wildfront.config.EventConfig;
+import dev.wildfront.config.HostileCampConfig;
 import dev.wildfront.config.WildfrontConfig;
 import dev.wildfront.discovery.DiscoveryManager;
 import dev.wildfront.event.EventScheduler;
@@ -44,7 +45,7 @@ public class EventSystemGameTest {
 	private static WildfrontConfig config(boolean eventsEnabled, double chance, int globalCooldownSeconds, TimeOfDay timeOfDay) {
 		return new WildfrontConfig(eventsEnabled, 1, globalCooldownSeconds, 16,
 				Map.of(EVENT, new EventConfig(true, COOLDOWN_SECONDS, chance, 0, timeOfDay, Weather.ANY)),
-				new DiscoveryConfig(1, 3, 60, 64));
+				new DiscoveryConfig(1, 3, 60, 64), HostileCampConfig.DEFAULT);
 	}
 
 	private static long cachesNear(ServerLevel level, BlockPos origin) {

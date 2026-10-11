@@ -12,6 +12,7 @@ import com.mojang.serialization.JsonOps;
 import dev.wildfront.config.ConfigManager;
 import dev.wildfront.config.DiscoveryConfig;
 import dev.wildfront.config.EventConfig;
+import dev.wildfront.config.HostileCampConfig;
 import dev.wildfront.config.WildfrontConfig;
 import dev.wildfront.discovery.ActiveCache;
 import dev.wildfront.discovery.CacheSiteFinder;
@@ -297,7 +298,7 @@ public class WildfrontGameTest {
 		try {
 			WorldEvent event = WildfrontEvents.MYSTERIOUS_DISCOVERY;
 			EventConfig eventConfig = event.defaultConfig();
-			WildfrontConfig config = new WildfrontConfig(true, 10, 120, 48, Map.of(event.id(), eventConfig), new DiscoveryConfig(1, 3, 60, 64));
+			WildfrontConfig config = new WildfrontConfig(true, 10, 120, 48, Map.of(event.id(), eventConfig), new DiscoveryConfig(1, 3, 60, 64), HostileCampConfig.DEFAULT);
 			long now = level.getGameTime();
 
 			Optional<WorldEvent.Plan> plan = event.plan(new EventContext(player, level, now, eventConfig, config));

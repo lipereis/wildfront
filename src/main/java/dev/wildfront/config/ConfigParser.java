@@ -30,7 +30,13 @@ public final class ConfigParser {
 	static final int MAX_ACTIVE_CACHES = 64;
 
 	private static final String EVENTS = "events";
+	static final int MAX_GUARDS_PER_CAMP = 8;
+	static final int MIN_ACTIVATION_RADIUS = 16;
+	static final int MAX_ACTIVATION_RADIUS = 96;
+	static final int MAX_LIVING_GUARDS = 200;
+
 	private static final String DISCOVERY = "discovery";
+	private static final String HOSTILE_CAMPS = "hostileCamps";
 	private static final String LEGACY_MYSTERIOUS_DISCOVERY = "mysteriousDiscovery";
 
 	private ConfigParser() {
@@ -64,7 +70,28 @@ public final class ConfigParser {
 				readInt(root, "", "globalCooldownSeconds", WildfrontConfig.DEFAULT_GLOBAL_COOLDOWN_SECONDS, 0, MAX_COOLDOWN_SECONDS, warnings),
 				readInt(root, "", "shareRadius", WildfrontConfig.DEFAULT_SHARE_RADIUS, 0, MAX_SHARE_RADIUS, warnings),
 				events,
-				parseDiscovery(readObject(root, "", DISCOVERY, warnings), warnings));
+				parseDiscovery(readObject(root, "", DISCOVERY, warnings), warnings),
+				parseHostileCamps(readObject(root, "", HOSTILE_CAMPS, warnings), warnings));
+	}
+
+	private static HostileCampConfig parseHostileCamps(JsonObject json, List<String> warnings) {
+		HostileCampConfig defaults = HostileCampConfig.DEFAULT;
+		String path = HOSTILE_CAMPS + ".";
+		int minGuards = readInt(json, path, "minGuards", defaults.minGuards(), 1, MAX_GUARDS_PER_CAMP, warnings);
+		int maxGuards = readInt(json, path, "maxGuards", defaults.maxGuards(), 1, MAX_GUARDS_PER_CAMP, warnings);
+
+		if (maxGuards < minGuards) {
+			warnings.add("'" + path + "maxGuards' (" + maxGuards + ") must not be smaller than '" + path + "minGuards' (" + minGuards
+					+ "); using defaults " + defaults.minGuards() + " and " + defaults.maxGuards());
+			minGuards = defaults.minGuards();
+			maxGuards = defaults.maxGuards();
+		}
+
+		return new HostileCampConfig(
+				readBoolean(json, path, "enabled", defaults.enabled(), warnings),
+				readInt(json, path, "activationRadius", defaults.activationRadius(), MIN_ACTIVATION_RADIUS, MAX_ACTIVATION_RADIUS, warnings),
+				minGuards, maxGuards,
+				readInt(json, path, "maxLivingGuards", defaults.maxLivingGuards(), 1, MAX_LIVING_GUARDS, warnings));
 	}
 
 	private static DiscoveryConfig parseDiscovery(JsonObject json, List<String> warnings) {
@@ -123,6 +150,14 @@ public final class ConfigParser {
 		discovery.addProperty("lifetimeSeconds", config.discovery().lifetimeSeconds());
 		discovery.addProperty("maxActive", config.discovery().maxActive());
 		root.add(DISCOVERY, discovery);
+
+		JsonObject camps = new JsonObject();
+		camps.addProperty("enabled", config.hostileCamps().enabled());
+		camps.addProperty("activationRadius", config.hostileCamps().activationRadius());
+		camps.addProperty("minGuards", config.hostileCamps().minGuards());
+		camps.addProperty("maxGuards", config.hostileCamps().maxGuards());
+		camps.addProperty("maxLivingGuards", config.hostileCamps().maxLivingGuards());
+		root.add(HOSTILE_CAMPS, camps);
 		return root;
 	}
 

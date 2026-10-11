@@ -128,4 +128,35 @@ public class LootGameTest {
 		helper.assertTrue(chestsWith(chests, Items.ENCHANTED_BOOK) > 0, "an enchanted book should turn up in " + DRAWS + " camp chests");
 		helper.succeed();
 	}
+
+	@GameTest
+	public void banditCampLootHasItsStackSizesAndWear(GameTestHelper helper) {
+		List<Content> chests = draw(helper, WildfrontLootTables.BANDIT_CAMP_SMALL);
+
+		assertAtLeastWhenPresent(helper, chests, Items.ARROW, 6);
+		assertAtLeastWhenPresent(helper, chests, Items.IRON_INGOT, 2);
+		assertAtLeastWhenPresent(helper, chests, Items.EMERALD, 2);
+		assertAtLeastWhenPresent(helper, chests, Items.COAL, 3);
+
+		int worn = 0;
+
+		for (Content chest : chests) {
+			for (ItemStack stack : chest.stacks()) {
+				Item item = stack.getItem();
+
+				if (item == Items.CROSSBOW || item == Items.IRON_SWORD || item == Items.SHIELD || item == Items.IRON_HELMET || item == Items.IRON_CHESTPLATE) {
+					helper.assertTrue(stack.isDamaged(), "gear taken from bandits should be worn, but a " + item + " was as new");
+					worn++;
+				}
+			}
+		}
+
+		helper.assertTrue(worn == DRAWS, "every bandit chest should hold exactly one piece of gear, but " + worn + " turned up in " + DRAWS + " chests");
+		helper.assertTrue(chestsWith(chests, Items.ARROW) > 0, "arrows should turn up in " + DRAWS + " bandit chests");
+		helper.assertTrue(chestsWith(chests, Items.DIAMOND) > 0, "diamonds should turn up in " + DRAWS + " bandit chests");
+		helper.assertTrue(chests.stream().allMatch(chest -> chest.total(Items.DIAMOND) <= 2), "a bandit chest should hold at most 2 diamonds");
+		helper.assertTrue(chestsWith(chests, Items.BOOK) == 0, "plain books turned up in " + chestsWith(chests, Items.BOOK) + " bandit chests");
+		helper.assertTrue(chestsWith(chests, Items.ENCHANTED_BOOK) > 0, "an enchanted book should turn up in " + DRAWS + " bandit chests");
+		helper.succeed();
+	}
 }

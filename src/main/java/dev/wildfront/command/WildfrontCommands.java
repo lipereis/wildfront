@@ -9,8 +9,11 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.exceptions.DynamicCommandExceptionType;
 
 import dev.wildfront.Wildfront;
+import dev.wildfront.camp.CampManager;
+import dev.wildfront.camp.CampState;
 import dev.wildfront.config.ConfigManager;
 import dev.wildfront.config.EventConfig;
+import dev.wildfront.config.HostileCampConfig;
 import dev.wildfront.config.WildfrontConfig;
 import dev.wildfront.event.EventScheduler;
 import dev.wildfront.event.EventSettings;
@@ -42,6 +45,9 @@ public final class WildfrontCommands {
 				Commands.literal("wildfront")
 						.requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
 						.then(Commands.literal("reload").executes(WildfrontCommands::reload))
+						.then(Commands.literal("camp")
+								.then(Commands.literal("list").executes(WildfrontCommands::listCamps))
+								.then(Commands.literal("reset").executes(WildfrontCommands::resetCamps)))
 						.then(Commands.literal("event")
 								.then(Commands.literal("list").executes(WildfrontCommands::list))
 								.then(Commands.literal("trigger")
@@ -54,6 +60,29 @@ public final class WildfrontCommands {
 										.executes(context -> reset(context, context.getSource().getPlayerOrException()))
 										.then(Commands.argument("player", EntityArgument.player())
 												.executes(context -> reset(context, EntityArgument.getPlayer(context, "player"))))))));
+	}
+
+	private static int listCamps(CommandContext<CommandSourceStack> context) {
+		CommandSourceStack source = context.getSource();
+		List<CampState> camps = CampManager.states(source.getServer().overworld());
+		HostileCampConfig config = ConfigManager.get().hostileCamps();
+
+		source.sendSuccess(() -> Component.literal("Wildfront bandit camps (" + (config.enabled() ? "on" : "off") + ", activation radius "
+				+ config.activationRadius() + ", " + config.minGuards() + " to " + config.maxGuards() + " guards): " + camps.size() + " visited"), false);
+
+		for (CampState camp : camps) {
+			source.sendSuccess(() -> Component.literal(" - " + camp.center().toShortString() + ": "
+					+ (camp.cleared() ? "cleared" : camp.guardsLeft() + " guard(s) left")), false);
+		}
+
+		return camps.size();
+	}
+
+	private static int resetCamps(CommandContext<CommandSourceStack> context) {
+		int[] removed = CampManager.reset(context.getSource().getServer().overworld());
+		context.getSource().sendSuccess(() -> Component.literal("Removed " + removed[0] + " loaded guard(s) and forgot " + removed[1]
+				+ " camp(s). Camps become occupied again when a player comes near."), true);
+		return removed[1];
 	}
 
 	private static int reload(CommandContext<CommandSourceStack> context) {

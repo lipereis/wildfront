@@ -62,6 +62,7 @@ class ConfigParserTest {
 					"globalCooldownSeconds": 0,
 					"shareRadius": 0,
 					"discovery": { "minDistance": 8, "maxDistance": 8, "lifetimeSeconds": 30, "maxActive": 1 },
+					"hostileCamps": { "enabled": false, "activationRadius": 16, "minGuards": 1, "maxGuards": 8, "maxLivingGuards": 5 },
 					"events": {
 						"discovery": {
 							"enabled": false,
@@ -76,7 +77,7 @@ class ConfigParserTest {
 
 		assertEquals(new WildfrontConfig(false, 2, 0, 0, Map.of(
 				"discovery", new EventConfig(false, 15, 1.0, 0, TimeOfDay.NIGHT, Weather.RAIN),
-				"storm", STORM), new DiscoveryConfig(8, 8, 30, 1)), config);
+				"storm", STORM), new DiscoveryConfig(8, 8, 30, 1), new HostileCampConfig(false, 16, 1, 8, 5)), config);
 		assertTrue(warnings.isEmpty());
 	}
 
@@ -226,6 +227,31 @@ class ConfigParserTest {
 	@Test
 	void defaultCacheDistancesAreOrdered() {
 		assertTrue(DiscoveryConfig.DEFAULT.minDistance() <= DiscoveryConfig.DEFAULT.maxDistance());
+	}
+
+	@Test
+	void hostileCampSectionFallsBackValueByValue() {
+		WildfrontConfig config = parse("""
+				{ "hostileCamps": { "enabled": "no", "activationRadius": 500, "minGuards": 2, "maxGuards": 6, "maxLivingGuards": 0 } }""");
+
+		assertEquals(new HostileCampConfig(true, HostileCampConfig.DEFAULT.activationRadius(), 2, 6, HostileCampConfig.DEFAULT.maxLivingGuards()), config.hostileCamps());
+		assertEquals(3, warnings.size(), warnings.toString());
+	}
+
+	@Test
+	void maxGuardsBelowMinGuardsResetsBoth() {
+		WildfrontConfig config = parse("{\"hostileCamps\": {\"minGuards\": 6, \"maxGuards\": 2}}");
+
+		assertEquals(HostileCampConfig.DEFAULT, config.hostileCamps());
+		assertEquals(1, warnings.size(), warnings.toString());
+		assertTrue(warnings.get(0).contains("'hostileCamps.maxGuards'"));
+	}
+
+	@Test
+	void hostileCampDefaultsAreWrittenAndReadBack() {
+		assertEquals(HostileCampConfig.DEFAULT, DEFAULT.hostileCamps());
+		assertTrue(ConfigParser.toJson(DEFAULT).has("hostileCamps"));
+		assertTrue(HostileCampConfig.DEFAULT.minGuards() <= HostileCampConfig.DEFAULT.maxGuards());
 	}
 
 	@Test

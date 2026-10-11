@@ -6,6 +6,7 @@ import java.util.Map;
 import com.mojang.serialization.Codec;
 
 import dev.wildfront.Wildfront;
+import dev.wildfront.camp.CampState;
 import dev.wildfront.discovery.ActiveCache;
 
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
@@ -24,6 +25,12 @@ public final class WildfrontAttachments {
 	 */
 	public static final AttachmentType<List<ActiveCache>> ACTIVE_CACHES = AttachmentRegistry.createPersistent(
 			Wildfront.id("active_caches"), ActiveCache.CODEC.listOf());
+
+	/**
+	 * Per level: bandit camps whose guards have been spawned, occupied or cleared.
+	 */
+	public static final AttachmentType<List<CampState>> CAMPS = AttachmentRegistry.createPersistent(
+			Wildfront.id("camps"), CampState.CODEC.listOf());
 
 	private WildfrontAttachments() {
 	}

@@ -4,12 +4,14 @@ A Minecraft Java Edition mod (Fabric) about dynamic exploration: rare world even
 discoveries and abandoned places that make the world feel unpredictable and alive, without
 replacing vanilla survival.
 
-**Version 0.2.1** for Minecraft 26.3 (Fabric). It adds:
+**Version 0.3.0** for Minecraft 26.3 (Fabric). It adds:
 
 - **Mysterious Discovery**, a dynamic event: a forgotten cache appears near a player who is out
   exploring, the player is told which way to look, and whoever opens it is rewarded.
 - **Abandoned camps**, small structures in four layouts with supplies left behind, in newly generated terrain.
-- A configurable, server-side event system both are built on.
+- **Bandit camps**, rarer camps that are still occupied: a few guards defend a better chest, and
+  once they are defeated the camp stays cleared.
+- A configurable, server-side event system the events are built on.
 
 | Abandoned camp | Forgotten cache |
 |----------------|-----------------|
@@ -20,7 +22,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full list of features and known limitat
 ## Installing
 
 1. Install [Fabric Loader](https://fabricmc.net/use/) 0.19.5 or newer for Minecraft 26.3.
-2. Download `wildfront-0.2.1+mc26.3.jar` from the
+2. Download `wildfront-0.3.0+mc26.3.jar` from the
    [latest release](https://github.com/lipereis/wildfront/releases/latest) (not the `-sources` file).
 3. Put it and [Fabric API](https://modrinth.com/mod/fabric-api) in the `mods` folder of the game
    directory that your Fabric installation uses.
@@ -71,7 +73,7 @@ Runs the unit tests and the headless in-world game tests, and writes the release
 |---------|--------------|-----------------|
 | `.\gradlew.bat test` | Unit tests for logic that needs no world: scheduling, cooldowns, config validation, directions | yes |
 | `.\gradlew.bat runGameTest` | Game tests on a headless server: caches, loot, expiry, site selection, the automatic event check with several players, commands, camp data and generation, and a timing check of the timer-driven code. Ends with `All N required tests passed` | yes |
-| `.\gradlew.bat runClientGameTest` | Opens a real game window, creates a normally generated world, surveys where camps will generate and checks that every layout occurs, visits a naturally generated camp of each layout, builds all layouts side by side, triggers the event by command and waits for it to trigger on its own. Prints the survey as `survey: N camps at M candidate spots ..., by layout: ...`. Writes screenshots to `build/run/clientGameTest/screenshots` | no |
+| `.\gradlew.bat runClientGameTest` | Opens a real game window, creates a normally generated world, surveys where camps will generate and checks that every layout occurs, visits a naturally generated camp of each layout, visits a naturally generated bandit camp and follows it from occupied through a peaceful spell to cleared, builds all layouts side by side, triggers the event by command and waits for it to trigger on its own. Prints the survey as `survey: N camps at M candidate spots ..., by layout: ...`. Writes screenshots to `build/run/clientGameTest/screenshots` | no |
 | `.\gradlew.bat runClientGameTest "-Pwildfront.acceptMinecraftEula=true"` | The same, followed by a dedicated-server test: starts a real dedicated server on localhost, connects the client to it and checks command permissions, a forced and an automatic event, finding and expiry of a cache, and a naturally generated camp. Without the flag this part reports `SKIPPED` | no |
 | `.\gradlew.bat runProductionClient` | Starts a non-development client with the release jar, as a player would run it. Close the window to end it | no |
 
@@ -105,7 +107,7 @@ To confirm the mod loaded, look for these lines in the console or in `run/logs/l
 
 ```
 [Wildfront] Registered 1 event(s): [mysterious_discovery]
-[Wildfront] Initialized (version 0.2.1+mc26.3, environment CLIENT)
+[Wildfront] Initialized (version 0.3.0+mc26.3, environment CLIENT)
 [Wildfront] Client initialized
 ```
 
@@ -138,6 +140,13 @@ start. Apply edits with `/wildfront reload` or by restarting.
     "maxDistance": 48,
     "lifetimeSeconds": 600,
     "maxActive": 8
+  },
+  "hostileCamps": {
+    "enabled": true,
+    "activationRadius": 48,
+    "minGuards": 2,
+    "maxGuards": 3,
+    "maxLivingGuards": 40
   }
 }
 ```
@@ -171,6 +180,16 @@ Settings of the forgotten cache under `discovery`:
 | `maxDistance` | `48` | 8 – 128 | Furthest the cache appears; must not be smaller than `minDistance` |
 | `lifetimeSeconds` | `600` | 30 – 86400 | How long an unopened cache stays before it is removed |
 | `maxActive` | `8` | 1 – 64 | How many caches may be waiting to be found at once on the server |
+
+Settings of bandit camps under `hostileCamps`:
+
+| Key | Default | Range | Meaning |
+|-----|---------|-------|---------|
+| `enabled` | `true` | | Whether guards appear at bandit camps. The camps themselves are world generation and still generate when this is off |
+| `activationRadius` | `48` | 16 – 96 | How close, in blocks, a player must come before a camp's guards appear |
+| `minGuards` | `2` | 1 – 8 | Guards of a camp on easy difficulty |
+| `maxGuards` | `3` | 1 – 8 | Guards of a camp on hard difficulty; must not be smaller than `minGuards` |
+| `maxLivingGuards` | `40` | 1 – 200 | Guards alive on the server at once, over all camps. A camp that would exceed it stays empty until there is room |
 
 A missing, mistyped or out-of-range value is replaced by its default and reported in the log and by
 `/wildfront reload`. A file that is not valid JSON is left untouched and defaults are used for
@@ -264,6 +283,48 @@ gets no structure; nothing is moved elsewhere. Data packs may use the type for t
 The blocks of a camp are vanilla and stay if the mod is removed. What the game then reports about
 the structure it no longer knows has not been tested.
 
+## Bandit camp
+
+A camp that somebody still lives in: a burning fire inside a low log palisade, two tents, a
+barrel, a practice target and a chest. It is guarded.
+
+![A bandit camp with its guards on the plains](docs/images/bandit_camp.png)
+
+- **Guards.** Pillagers with crossbows and, from three guards up, one vindicator. They appear the
+  first time a player in survival or adventure mode comes within `activationRadius` blocks, so a
+  camp nobody visits costs nothing. A camp has `minGuards` on easy, `maxGuards` on hard and a
+  random number in between on normal.
+- **Peaceful.** A camp stays empty on peaceful. If the difficulty is set to peaceful while a camp
+  has guards, the game removes them and the camp counts as unvisited again: it gets a fresh set
+  of guards when a player comes near on a higher difficulty. Cleared camps stay cleared.
+- **Clearing.** When the last guard dies, players within 64 blocks are told the camp is cleared.
+  A cleared camp never gets guards again. Guards do not despawn, carry no banner and killing them
+  does not give Bad Omen.
+- **Loot.** The chest holds more than an abandoned camp's: arrows, food, coal, iron, gold and
+  emeralds, always one worn piece of gear (crossbow, iron sword, shield, iron helmet or
+  chestplate) and sometimes diamonds, a golden apple, a saddle or an enchanted book. Nothing
+  locks the chest; it can be opened without fighting.
+- **Where.** The same biomes and the same dry, level ground as abandoned camps, but at least 400
+  blocks from the world origin and away from villages. Candidate spots are about 320 blocks apart
+  (spacing 20 chunks, separation 8). In the one world measured (seed `wildfront`, 289 candidate
+  spots) 11 spots, or 4%, got a camp. Other worlds will differ.
+- **Only in chunks generated after the mod was added.**
+- Find one with `/locate structure wildfront:bandit_camp`; build one with
+  `/place structure wildfront:bandit_camp`. A placed camp gets guards like a generated one.
+- `/wildfront camp list` shows the camps visited so far and how many guards each has left.
+
+Which camps were visited and cleared is stored in the world save. The count of guards left only
+changes when a guard dies. If guards vanish another way, for example through a command of another
+mod, the camp stays listed as occupied and is never reported cleared; `/wildfront camp reset`
+forgets all camps so they are occupied again on the next visit.
+
+Data files under `data/wildfront/`: `worldgen/structure/bandit_camp.json`,
+`worldgen/structure_set/bandit_camps.json`, `worldgen/template_pool/bandit_camp/start.json`,
+`structure/bandit_camp/small_1.nbt`, `tags/worldgen/biome/has_structure/bandit_camp.json` and
+`loot_table/camp/bandit_small.json`. The structure uses a third setting of
+`wildfront:flat_ground_jigsaw`, `min_distance_from_origin` (default 0): no structure closer than
+that many blocks, measured horizontally, to x 0, z 0.
+
 ### Editing or adding layouts
 
 The `.nbt` templates are binary and are generated by `tools/generate_structures.py` (Python 3,
@@ -295,6 +356,8 @@ All require operator permission (game master level; cheats enabled in singleplay
 | `/wildfront event list` | Shows settings, your remaining cooldowns and which conditions you are still waiting for |
 | `/wildfront event trigger <event> [player]` | Triggers an event now, ignoring cooldowns, chance and conditions, and starts the cooldowns |
 | `/wildfront event reset [player]` | Clears the player's event cooldowns |
+| `/wildfront camp list` | Shows the bandit camp settings and every camp visited so far, with its guards left or `cleared` |
+| `/wildfront camp reset` | Removes all loaded guards and forgets all camps, cleared ones included; camps are occupied again when a player comes near |
 | `/wildfront reload` | Reloads the config file and reports problems |
 
 ## Testing the event in a world
@@ -346,6 +409,7 @@ src/main/java/dev/wildfront/
   event/trigger/       configurable trigger conditions (distance, time of day, weather)
   event/type/          concrete events
   discovery/           forgotten cache: site selection, placement, tracking, expiry
+  camp/                bandit camps: who guards them, spawning, tracking, clearing
   registry/            central registration of events, data attachments, loot table keys and structure types
   worldgen/            structure type that only generates on dry, level ground
   config/              config file loading and validation
@@ -370,8 +434,8 @@ docs/images/           screenshots taken by the client game test
 5. Commit, push and wait for the build workflow to pass. Then tag and push the tag:
 
    ```
-   git tag v0.2.1
-   git push origin v0.2.1
+   git tag v0.3.0
+   git push origin v0.3.0
    ```
 
    The release workflow builds the tagged commit, runs the tests, and publishes a GitHub release

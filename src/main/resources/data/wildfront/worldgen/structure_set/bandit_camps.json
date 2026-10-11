@@ -1,0 +1,18 @@
+{
+	"structures": [
+		{
+			"structure": "wildfront:bandit_camp",
+			"weight": 1
+		}
+	],
+	"placement": {
+		"type": "minecraft:random_spread",
+		"spacing": 20,
+		"separation": 8,
+		"salt": 731942068,
+		"exclusion_zone": {
+			"other_set": "minecraft:villages",
+			"chunk_count": 8
+		}
+	}
+}

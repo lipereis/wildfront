@@ -5,13 +5,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import dev.wildfront.registry.WildfrontStructures;
-
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.QuartPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BiomeTags;
 import net.minecraft.world.level.ChunkPos;
@@ -27,7 +26,7 @@ import net.minecraft.world.level.levelgen.structure.placement.RandomSpreadStruct
 import net.minecraft.world.level.levelgen.structure.pools.SinglePoolElement;
 
 /**
- * Asks world generation where abandoned camps will be and which layout each will have, without
+ * Asks world generation where the camps of one structure will be and which layout each will have, without
  * generating any terrain: it only computes the structure starts of the chunks the camp's placement
  * selects as candidates. That makes it cheap enough to look at hundreds of candidates.
  */
@@ -43,12 +42,13 @@ final class CampSurvey {
 	/**
 	 * @param candidates how many candidate chunks were examined
 	 * @param camps      the candidates at which a camp will generate, nearest first
+	 * @param layouts    every layout the structure can have
 	 */
-	record Result(int candidates, List<Camp> camps) {
+	record Result(int candidates, List<Camp> camps, List<Identifier> layouts) {
 		Map<Identifier, Integer> countByLayout() {
 			Map<Identifier, Integer> counts = new LinkedHashMap<>();
 
-			for (Identifier layout : WildfrontStructures.ABANDONED_CAMP_LAYOUTS) {
+			for (Identifier layout : layouts) {
 				counts.put(layout, 0);
 			}
 
@@ -68,11 +68,11 @@ final class CampSurvey {
 	}
 
 	/**
-	 * Examines candidate chunks in growing rings around {@code center} until every layout has been
+	 * Examines the structure's candidate chunks in growing rings around {@code center} until every layout has been
 	 * seen and at least {@code enoughCamps} camps were found, or {@code maxCandidates} is reached.
 	 */
-	static Result run(ServerLevel level, BlockPos center, int enoughCamps, int maxCandidates) {
-		Holder<Structure> holder = level.registryAccess().lookupOrThrow(Registries.STRUCTURE).get(WildfrontStructures.ABANDONED_CAMP).orElseThrow();
+	static Result run(ServerLevel level, BlockPos center, ResourceKey<Structure> structure, List<Identifier> layouts, int enoughCamps, int maxCandidates) {
+		Holder<Structure> holder = level.registryAccess().lookupOrThrow(Registries.STRUCTURE).get(structure).orElseThrow();
 		ChunkGeneratorStructureState state = level.getChunkSource().getGeneratorState();
 		RandomSpreadStructurePlacement placement = (RandomSpreadStructurePlacement) state.getPlacementsForStructure(holder).get(0);
 		BiomeResolver biomes = level.getChunkSource().getGenerator().getBiomeSource().createUncachedResolver(state.randomState());
@@ -110,7 +110,7 @@ final class CampSurvey {
 				}
 			}
 
-			boolean everyLayoutSeen = WildfrontStructures.ABANDONED_CAMP_LAYOUTS.stream()
+			boolean everyLayoutSeen = layouts.stream()
 					.allMatch(layout -> camps.stream().anyMatch(camp -> camp.layout().equals(layout)));
 
 			if (everyLayoutSeen && camps.size() >= enoughCamps) {
@@ -118,6 +118,6 @@ final class CampSurvey {
 			}
 		}
 
-		return new Result(candidates, camps);
+		return new Result(candidates, camps, layouts);
 	}
 }

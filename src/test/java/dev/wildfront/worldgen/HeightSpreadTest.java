@@ -50,4 +50,15 @@ class HeightSpreadTest {
 		assertTrue(HeightSpread.hasWater(new int[] {62, 62, 62}, new int[] {62, 60, 62}));
 		assertFalse(HeightSpread.hasWater(new int[0], new int[0]));
 	}
+
+	@Test
+	void distanceFromTheOriginIsMeasuredHorizontally() {
+		assertTrue(HeightSpread.isFarEnough(0, 0, 0));
+		assertFalse(HeightSpread.isFarEnough(0, 0, 1));
+		assertTrue(HeightSpread.isFarEnough(400, 0, 400));
+		assertFalse(HeightSpread.isFarEnough(399, 0, 400));
+		assertTrue(HeightSpread.isFarEnough(-300, 300, 400));
+		assertFalse(HeightSpread.isFarEnough(-200, 200, 400));
+		assertTrue(HeightSpread.isFarEnough(30_000_000, 30_000_000, 100_000));
+	}
 }

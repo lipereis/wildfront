@@ -1,5 +1,6 @@
 package dev.wildfront;
 
+import dev.wildfront.camp.CampManager;
 import dev.wildfront.command.WildfrontCommands;
 import dev.wildfront.config.ConfigManager;
 import dev.wildfront.discovery.DiscoveryManager;
@@ -35,6 +36,7 @@ public class Wildfront implements ModInitializer {
 		WildfrontEvents.init();
 		EVENTS.register();
 		DiscoveryManager.register();
+		CampManager.register();
 		WildfrontCommands.register();
 
 		LOGGER.info("[Wildfront] Initialized (version {}, environment {})",

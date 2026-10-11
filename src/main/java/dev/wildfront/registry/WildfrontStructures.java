@@ -41,6 +41,15 @@ public final class WildfrontStructures {
 			Wildfront.id("abandoned_camp/tent"),
 			Wildfront.id("abandoned_camp/cart"),
 			Wildfront.id("abandoned_camp/ruin"));
+	public static final ResourceKey<Structure> BANDIT_CAMP = ResourceKey.create(Registries.STRUCTURE, Wildfront.id("bandit_camp"));
+	public static final ResourceKey<StructureSet> BANDIT_CAMPS = ResourceKey.create(Registries.STRUCTURE_SET, Wildfront.id("bandit_camps"));
+	public static final ResourceKey<StructureTemplatePool> BANDIT_CAMP_START_POOL = ResourceKey.create(Registries.TEMPLATE_POOL, Wildfront.id("bandit_camp/start"));
+
+	/**
+	 * Every layout a bandit camp can have.
+	 */
+	public static final List<Identifier> BANDIT_CAMP_LAYOUTS = List.of(Wildfront.id("bandit_camp/small_1"));
+
 	public static final TagKey<Biome> HAS_ABANDONED_CAMP = TagKey.create(Registries.BIOME, Wildfront.id("has_structure/abandoned_camp"));
 
 	private WildfrontStructures() {

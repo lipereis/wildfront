@@ -49,6 +49,13 @@ public final class HeightSpread {
 	}
 
 	/**
+	 * @return whether the point is at least {@code minDistance} blocks from the origin, horizontally
+	 */
+	public static boolean isFarEnough(int x, int z, int minDistance) {
+		return (long) x * x + (long) z * z >= (long) minDistance * minDistance;
+	}
+
+	/**
 	 * @param surface heights of the topmost block of any kind, water included
 	 * @param floor   heights of the topmost solid block at the same points
 	 * @return whether any point has water (or another fluid) standing on its ground

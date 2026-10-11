@@ -13,9 +13,10 @@ import java.util.Map;
  *                              same event instead of getting their own; 0 to disable
  * @param events                settings per event id; contains every registered event
  * @param discovery             settings of the forgotten cache
+ * @param hostileCamps          settings of bandit camps
  */
 public record WildfrontConfig(boolean eventsEnabled, int checkIntervalSeconds, int globalCooldownSeconds, int shareRadius,
-		Map<String, EventConfig> events, DiscoveryConfig discovery) {
+		Map<String, EventConfig> events, DiscoveryConfig discovery, HostileCampConfig hostileCamps) {
 	public static final boolean DEFAULT_EVENTS_ENABLED = true;
 	public static final int DEFAULT_CHECK_INTERVAL_SECONDS = 10;
 	public static final int DEFAULT_GLOBAL_COOLDOWN_SECONDS = 120;
@@ -27,7 +28,7 @@ public record WildfrontConfig(boolean eventsEnabled, int checkIntervalSeconds, i
 
 	public static WildfrontConfig defaults(Map<String, EventConfig> eventDefaults) {
 		return new WildfrontConfig(DEFAULT_EVENTS_ENABLED, DEFAULT_CHECK_INTERVAL_SECONDS, DEFAULT_GLOBAL_COOLDOWN_SECONDS,
-				DEFAULT_SHARE_RADIUS, eventDefaults, DiscoveryConfig.DEFAULT);
+				DEFAULT_SHARE_RADIUS, eventDefaults, DiscoveryConfig.DEFAULT, HostileCampConfig.DEFAULT);
 	}
 
 	/**

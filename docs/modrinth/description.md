@@ -19,6 +19,10 @@ Somewhere 24 to 48 blocks away in that direction, a **forgotten cache** now stan
 
 Small, long-deserted traveller's camps generate in forests, taigas, savannas, plains and meadows, on dry and level ground. Each has a cold fire pit and a chest of travel supplies such as food, coal, torches, a worn tool, a compass or a map. Around them you find one of four scenes: a collapsed lean-to, a sagging tent, a broken-down cart with its load still on it, or the corner of a fallen stone hut.
 
+## Bandit camps
+
+Rarer, and still occupied: a burning fire inside a log palisade, two tents and a chest, guarded by two or three pillagers and vindicators depending on the difficulty. The guards appear when you first come near. Defeat them and the camp is cleared for good; they never come back. The chest holds better loot than an abandoned camp's, always including a worn weapon or piece of armour. Bandit camps keep at least 400 blocks from the world origin and away from villages, and stay empty on peaceful.
+
 Camps only generate in **newly generated chunks**. Existing terrain is never changed.
 
 ## Configurable

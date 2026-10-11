@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.3.0
+
+### Added
+
+- **Bandit camps.** A new, rarer kind of camp that is still occupied: a burning fire inside a log
+  palisade, two tents and a chest, guarded by two or three pillagers and vindicators depending on
+  the difficulty. The guards appear when a player first comes near, stay at their camp, and do
+  not come back once defeated: the camp is then cleared for good. The chest holds better loot
+  than an abandoned camp's, always including a worn weapon or piece of armour. Bandit camps
+  generate at least 400 blocks from the world origin, away from villages, in newly generated
+  chunks only.
+- Config section `hostileCamps`: switch guards off, set how close a player must come, how many
+  guards a camp has, and a server-wide limit on living guards.
+- Commands `/wildfront camp list` and `/wildfront camp reset`.
+- Data packs can give `wildfront:flat_ground_jigsaw` structures a `min_distance_from_origin`.
+
+### Known limitations
+
+- A camp counts its guards by their deaths. Switching to peaceful is handled: the camp is empty
+  until the difficulty is raised and then gets guards again. Guards removed any other way without
+  dying leave the camp listed as occupied; `/wildfront camp reset` repairs it.
+- The chest is not locked and can be looted without fighting.
+- How the fight plays, and how far guards follow a fleeing player, has only been checked by
+  automated tests, not by play.
+
 ## 0.2.1
 
 ### Changed

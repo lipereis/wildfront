@@ -2,6 +2,8 @@
 	"event.wildfront.mysterious_discovery.message": "You sense that something unusual has appeared to the %s...",
 	"event.wildfront.mysterious_discovery.overlay": "Mysterious Discovery",
 	"event.wildfront.mysterious_discovery.found": "You uncovered a forgotten cache.",
+	"camp.wildfront.cleared": "The camp falls silent. Its guards are gone for good.",
+	"camp.wildfront.cleared.overlay": "Camp cleared",
 	"direction.wildfront.north": "north",
 	"direction.wildfront.north_east": "north-east",
 	"direction.wildfront.east": "east",

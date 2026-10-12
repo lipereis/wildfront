@@ -10,6 +10,7 @@ import com.mojang.serialization.JsonOps;
 
 import dev.wildfront.camp.CampManager;
 import dev.wildfront.camp.CampState;
+import dev.wildfront.camp.CanopyClearing;
 import dev.wildfront.config.HostileCampConfig;
 import dev.wildfront.registry.WildfrontAttachments;
 import dev.wildfront.registry.WildfrontLootTables;
@@ -28,12 +29,14 @@ import net.minecraft.world.Difficulty;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.monster.PatrollingMonster;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CampfireBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.entity.EntityTypeTest;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 
@@ -308,6 +311,45 @@ public class BanditCampGameTest {
 			CampManager.forget(level, center);
 		}
 
+		helper.succeed();
+	}
+
+	@GameTest
+	public void leavesAboveACampAreClearedAndNothingElse(GameTestHelper helper) {
+		ServerLevel level = helper.getLevel();
+		// A camp of three by three blocks whose ground layer is at height 1 of the test.
+		BlockPos low = helper.absolutePos(new BlockPos(2, 1, 2));
+		BlockPos high = helper.absolutePos(new BlockPos(4, 3, 4));
+		BoundingBox camp = BoundingBox.fromCorners(low, high);
+
+		helper.setBlock(new BlockPos(3, 1, 3), Blocks.OAK_LEAVES);      // in the ground layer: part of the camp's own level
+		helper.setBlock(new BlockPos(3, 3, 3), Blocks.OAK_LEAVES);      // hanging into the camp
+		helper.setBlock(new BlockPos(3, 6, 3), Blocks.SPRUCE_LEAVES);   // above it
+		helper.setBlock(new BlockPos(3, 7, 3), Blocks.SNOW);            // lying on those leaves
+		helper.setBlock(new BlockPos(1, 5, 5), Blocks.OAK_LEAVES);      // over the margin around the camp
+		helper.setBlock(new BlockPos(0, 5, 3), Blocks.OAK_LEAVES);      // beyond the margin
+		helper.setBlock(new BlockPos(4, 5, 4), Blocks.OAK_LOG);         // a branch
+		helper.setBlock(new BlockPos(2, 2, 2), Blocks.HAY_BLOCK);      // the camp itself
+
+		int removed = CanopyClearing.clearAbove(level, camp, null);
+
+		helper.assertTrue(removed == 4, "three leaf blocks and the snow on one of them should be removed, but " + removed + " blocks were");
+		helper.assertBlockPresent(Blocks.AIR, new BlockPos(3, 3, 3));
+		helper.assertBlockPresent(Blocks.AIR, new BlockPos(3, 6, 3));
+		helper.assertBlockPresent(Blocks.AIR, new BlockPos(3, 7, 3));
+		helper.assertBlockPresent(Blocks.AIR, new BlockPos(1, 5, 5));
+		helper.assertBlockPresent(Blocks.OAK_LEAVES, new BlockPos(3, 1, 3));
+		helper.assertBlockPresent(Blocks.OAK_LEAVES, new BlockPos(0, 5, 3));
+		helper.assertBlockPresent(Blocks.OAK_LOG, new BlockPos(4, 5, 4));
+		helper.assertBlockPresent(Blocks.HAY_BLOCK, new BlockPos(2, 2, 2));
+
+		// Restricted to a chunk the camp does not reach into, nothing may be touched.
+		helper.setBlock(new BlockPos(3, 3, 3), Blocks.OAK_LEAVES);
+		ChunkPos elsewhere = new ChunkPos(ChunkPos.containing(low).x() + 3, ChunkPos.containing(low).z());
+		helper.assertTrue(CanopyClearing.clearAbove(level, camp, elsewhere) == 0, "a chunk the camp does not reach into should be left alone");
+		helper.assertBlockPresent(Blocks.OAK_LEAVES, new BlockPos(3, 3, 3));
+		helper.assertTrue(CanopyClearing.clearAbove(level, camp, ChunkPos.containing(helper.absolutePos(new BlockPos(3, 3, 3)))) == 1,
+				"the chunk the leaves are in should be cleared");
 		helper.succeed();
 	}
 

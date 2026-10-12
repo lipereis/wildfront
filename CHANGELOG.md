@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.1
+
+### Fixed
+
+- **Bandit camps in forests are no longer buried in leaves.** The crowns of neighbouring trees
+  closed over a camp and hung down to head height inside it, so it could hardly be seen or
+  walked through. Leaves and vines above a bandit camp are now removed when its terrain is
+  generated. Affects newly generated chunks only; camps that already exist keep their leaves.
+- The README claimed that a bandit camp built with `/place structure` gets guards. It does not:
+  the game does not record such a camp as a structure.
+
 ## 0.3.0
 
 ### Added

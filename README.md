@@ -4,7 +4,7 @@ A Minecraft Java Edition mod (Fabric) about dynamic exploration: rare world even
 discoveries and abandoned places that make the world feel unpredictable and alive, without
 replacing vanilla survival.
 
-**Version 0.3.0** for Minecraft 26.3 (Fabric). It adds:
+**Version 0.3.1** for Minecraft 26.3 (Fabric). It adds:
 
 - **Mysterious Discovery**, a dynamic event: a forgotten cache appears near a player who is out
   exploring, the player is told which way to look, and whoever opens it is rewarded.
@@ -22,7 +22,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full list of features and known limitat
 ## Installing
 
 1. Install [Fabric Loader](https://fabricmc.net/use/) 0.19.5 or newer for Minecraft 26.3.
-2. Download `wildfront-0.3.0+mc26.3.jar` from the
+2. Download `wildfront-0.3.1+mc26.3.jar` from the
    [latest release](https://github.com/lipereis/wildfront/releases/latest) (not the `-sources` file).
 3. Put it and [Fabric API](https://modrinth.com/mod/fabric-api) in the `mods` folder of the game
    directory that your Fabric installation uses.
@@ -107,7 +107,7 @@ To confirm the mod loaded, look for these lines in the console or in `run/logs/l
 
 ```
 [Wildfront] Registered 1 event(s): [mysterious_discovery]
-[Wildfront] Initialized (version 0.3.0+mc26.3, environment CLIENT)
+[Wildfront] Initialized (version 0.3.1+mc26.3, environment CLIENT)
 [Wildfront] Client initialized
 ```
 
@@ -310,7 +310,12 @@ barrel, a practice target and a chest. It is guarded.
   spots) 11 spots, or 4%, got a camp. Other worlds will differ.
 - **Only in chunks generated after the mod was added.**
 - Find one with `/locate structure wildfront:bandit_camp`; build one with
-  `/place structure wildfront:bandit_camp`. A placed camp gets guards like a generated one.
+  `/place structure wildfront:bandit_camp`. A camp built by `/place` is scenery only: the game
+  does not record it as a structure, so it gets no guards and the leaves above it stay.
+- **Open sky.** In forests the crowns of the trees around a camp would close over it and hang
+  down between the tents, as the game grows trees after it builds structures. The mod removes
+  leaves and vines above a bandit camp, and one block around it, as soon as its chunks are
+  finished. Trunks and branches are left alone. Abandoned camps keep their canopy.
 - `/wildfront camp list` shows the camps visited so far and how many guards each has left.
 
 Which camps were visited and cleared is stored in the world save. The count of guards left only
@@ -434,8 +439,8 @@ docs/images/           screenshots taken by the client game test
 5. Commit, push and wait for the build workflow to pass. Then tag and push the tag:
 
    ```
-   git tag v0.3.0
-   git push origin v0.3.0
+   git tag v0.3.1
+   git push origin v0.3.1
    ```
 
    The release workflow builds the tagged commit, runs the tests, and publishes a GitHub release

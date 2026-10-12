@@ -93,6 +93,7 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 			List<BlockPos> visited = naturallyGeneratedCamps(context, world, player);
 			campsAmongTrees(world, player);
 			occupiedBanditCamp(context, world, player);
+			banditCampsUnderTrees(context, world, player);
 			layoutGallery(context, world, player, visited);
 			forcedEvent(context, world, player);
 			automaticEvent(context, world, player);
@@ -337,6 +338,49 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 			server.runCommand("kill @e[tag=" + CampManager.GUARD_TAG + "]");
 			server.runCommand("wildfront reload");
 		}
+	}
+
+	/**
+	 * Visits bandit camps in forest and taiga biomes and checks that no leaves hang over them: an
+	 * occupied camp under a closed canopy cannot be seen from outside, and hardly walked through.
+	 */
+	private static void banditCampsUnderTrees(ClientGameTestContext context, TestSingleplayerContext world, String player) {
+		TestServerContext server = world.getServer();
+		CampSurvey.Result survey = server.computeOnServer(s -> CampSurvey.run(s.overworld(), s.getPlayerList().getPlayers().get(0).blockPosition(),
+				WildfrontStructures.BANDIT_CAMP, WildfrontStructures.BANDIT_CAMP_LAYOUTS, BANDIT_SURVEY_ENOUGH_CAMPS, SURVEY_MAX_CANDIDATES));
+		List<CampSurvey.Camp> wooded = survey.camps().stream().filter(CampSurvey.Camp::wooded).limit(WOODED_CAMPS_TO_VISIT).toList();
+		check(!wooded.isEmpty(), "expected at least one bandit camp in a forest or taiga among " + survey.camps().size() + " camps");
+		int overhanging = 0;
+
+		for (CampSurvey.Camp camp : wooded) {
+			BlockPos located = camp.start();
+			server.runCommand("gamemode spectator " + player);
+			server.runCommand("tp " + player + " " + located.getX() + " 200 " + located.getZ());
+			waitForTerrain(context, world, located);
+
+			BlockPos fire = server.computeOnServer(s -> findBlock(s.overworld(), located, Blocks.CAMPFIRE));
+			check(fire != null, "the bandit camp at " + located.toShortString() + " should have generated its fire");
+			int leaves = server.computeOnServer(s -> leavesOver(s.overworld(), fire));
+			System.out.println("[WildfrontClientGameTest] wooded bandit camp at " + fire.toShortString() + ": " + leaves + " leaf block(s) over it");
+			overhanging += leaves;
+		}
+
+		check(overhanging == 0, overhanging + " leaf block(s) hang over " + wooded.size() + " bandit camps in wooded biomes");
+	}
+
+	/**
+	 * Counts leaves above the nine by nine blocks of a bandit camp, whose fire is in its middle.
+	 */
+	private static int leavesOver(ServerLevel level, BlockPos fire) {
+		int leaves = 0;
+
+		for (BlockPos pos : BlockPos.betweenClosed(fire.offset(-4, 0, -4), fire.offset(4, 20, 4))) {
+			if (level.getBlockState(pos).is(BlockTags.LEAVES)) {
+				leaves++;
+			}
+		}
+
+		return leaves;
 	}
 
 	/**

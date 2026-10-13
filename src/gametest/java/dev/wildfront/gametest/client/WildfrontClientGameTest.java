@@ -13,6 +13,7 @@ import dev.wildfront.camp.CampState;
 import dev.wildfront.config.ConfigManager;
 import dev.wildfront.discovery.ActiveCache;
 import dev.wildfront.discovery.DiscoveryManager;
+import dev.wildfront.entity.GuardEntity;
 import dev.wildfront.registry.WildfrontLootTables;
 import dev.wildfront.registry.WildfrontStructures;
 import dev.wildfront.worldgen.HeightSpread;
@@ -30,6 +31,8 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CampfireBlock;
@@ -90,6 +93,7 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 			server.runCommand("weather clear");
 			server.runCommand("gamerule advance_time false");
 
+			guardPortrait(context, world, player);
 			List<BlockPos> visited = naturallyGeneratedCamps(context, world, player);
 			campsAmongTrees(world, player);
 			occupiedBanditCamp(context, world, player);
@@ -97,6 +101,42 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 			layoutGallery(context, world, player, visited);
 			forcedEvent(context, world, player);
 			automaticEvent(context, world, player);
+		}
+	}
+
+	/**
+	 * Summons a guard on a platform in the sky and takes its picture from the front and the back,
+	 * which is the only way to see whether the skin sits right on the model.
+	 */
+	private static void guardPortrait(ClientGameTestContext context, TestSingleplayerContext world, String player) {
+		TestServerContext server = world.getServer();
+		BlockPos at = server.computeOnServer(s -> s.getPlayerList().getPlayers().get(0).blockPosition());
+		int x = at.getX();
+		int y = 180;
+		int z = at.getZ();
+
+		server.runCommand("gamemode spectator " + player);
+		server.runCommand("fill " + (x - 3) + " " + y + " " + (z - 5) + " " + (x + 3) + " " + y + " " + (z + 5) + " minecraft:smooth_stone");
+		server.runCommand("summon wildfront:guard " + (x + 0.5) + " " + (y + 1) + " " + (z + 0.5));
+		server.runCommand("data merge entity @e[type=wildfront:guard,limit=1] {NoAI:1b,PersistenceRequired:1b,Rotation:[180f,0f]}");
+
+		try {
+			List<ItemStack> held = server.computeOnServer(s -> s.overworld().getEntities(EntityTypeTest.forClass(GuardEntity.class), guard -> true).stream()
+					.map(guard -> guard.getMainHandItem().copy()).toList());
+			check(held.size() == 1, "the summon command should create exactly one guard, but there are " + held.size());
+			check(held.get(0).is(Items.IRON_SWORD), "a summoned guard should carry an iron sword but holds " + held.get(0));
+
+			server.runCommand("tp " + player + " " + (x + 0.5) + " " + (y + 1.2) + " " + (z - 2.3) + " 0 5");
+			world.getConnection().waitForChunksRender();
+			// Long enough for the chat lines of the commands above to fade.
+			takeWorldScreenshot(context, "0_guard_front");
+
+			server.runCommand("tp " + player + " " + (x + 0.5) + " " + (y + 1.2) + " " + (z + 3.3) + " 180 5");
+			takeWorldScreenshot(context, "0_guard_back");
+		} finally {
+			server.runCommand("kill @e[type=wildfront:guard]");
+			server.runCommand("kill @e[type=minecraft:item]");
+			server.runCommand("fill " + (x - 3) + " " + y + " " + (z - 5) + " " + (x + 3) + " " + y + " " + (z + 5) + " minecraft:air");
 		}
 	}
 

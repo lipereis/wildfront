@@ -53,7 +53,7 @@ To see the mod right away: `/wildfront event trigger mysterious_discovery`, and 
 
 ## Good to know
 
-- **Server-side gameplay.** On a server, only the server needs the mod; players without it see the messages in English. In singleplayer, install it as usual.
+- **Needed on server and client.** All gameplay runs on the server, but the mod adds a creature of its own, so everyone who joins needs the mod too.
 - **Lightweight.** Nothing scans blocks or loads chunks on a timer. Players are checked once every ten seconds, which takes less than a microsecond each.
 - **Vanilla blocks only.** Caches and camps are made of vanilla blocks, which stay in the world if the mod is removed.
 - Requires [Fabric API](https://modrinth.com/mod/fabric-api).

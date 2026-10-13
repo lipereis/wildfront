@@ -11,7 +11,7 @@ Everything needed to create the Modrinth project page by copy and paste. The pag
 | Name | `Wildfront` |
 | URL (slug) | `wildfront` — free when checked on 2026-10-10 |
 | Visibility | Public (it stays a draft until you submit it for review) |
-| Summary | `Rare forgotten caches that appear while you explore, and abandoned camps in new terrain. Adds to vanilla survival without replacing it. Configurable and server-side.` |
+| Summary | `Rare forgotten caches that appear while you explore, and abandoned camps in new terrain. Adds to vanilla survival without replacing it. Configurable.` |
 | Icon | `icon-512.png` |
 | Description | paste the content of `description.md` |
 
@@ -23,11 +23,12 @@ The summary is 165 characters. Modrinth limits its length; shorten it if the for
 |---|---|
 | Categories | `adventure`, `worldgen` |
 | Additional category | `game-mechanics` |
-| Client side | Optional |
+| Client side | Required |
 | Server side | Required |
 
 In newer versions of the form the two "side" fields are a single "environment" choice; pick the
-one that says the mod works on the server alone and is optional on the client.
+one that says the mod is needed on both the client and the server. (Up to 0.3.2 the client side
+was optional; the guard entity changed that.)
 
 ## License and links
 

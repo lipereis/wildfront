@@ -4,6 +4,7 @@
 	"event.wildfront.mysterious_discovery.found": "You uncovered a forgotten cache.",
 	"camp.wildfront.cleared": "The camp falls silent. Its guards are gone for good.",
 	"camp.wildfront.cleared.overlay": "Camp cleared",
+	"entity.wildfront.guard": "Guard",
 	"direction.wildfront.north": "north",
 	"direction.wildfront.north_east": "north-east",
 	"direction.wildfront.east": "east",

@@ -7,6 +7,7 @@ import dev.wildfront.config.ConfigManager;
 import dev.wildfront.discovery.DiscoveryManager;
 import dev.wildfront.event.EventManager;
 import dev.wildfront.registry.WildfrontAttachments;
+import dev.wildfront.registry.WildfrontEntities;
 import dev.wildfront.registry.WildfrontEvents;
 import dev.wildfront.registry.WildfrontStructures;
 
@@ -34,6 +35,7 @@ public class Wildfront implements ModInitializer {
 		ConfigManager.reload();
 		WildfrontAttachments.init();
 		WildfrontStructures.init();
+		WildfrontEntities.init();
 		WildfrontEvents.init();
 		EVENTS.register();
 		DiscoveryManager.register();

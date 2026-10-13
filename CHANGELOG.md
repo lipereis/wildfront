@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Guard**, the mod's first own creature: a human guard with its own skin, 24 health and an
+  iron sword, hostile to players. Camps do not use it yet; it only appears through
+  `/summon wildfront:guard`.
+
+### Changed
+
+- **The mod must now be installed on clients too.** Until 0.3.2 a server could run Wildfront for
+  players who did not have it. The guard is a new kind of entity, which every client has to know.
+- Worlds lose their guards if the mod is removed. Blocks placed by the mod stay, as before.
+
 ## 0.3.2
 
 ### Fixed

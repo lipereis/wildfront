@@ -33,8 +33,9 @@ import net.minecraft.world.level.levelgen.structure.StructureStart;
  * into it. Nothing can be done about that while the camp is built; instead the leaves are removed
  * once a chunk is finished, when no tree can reach into it any more.
  *
- * <p>Each chunk clears its own part of a camp, so no other chunk is touched or loaded. Only newly
- * generated chunks are handled.
+ * <p>A tree that this leaves bare is removed with its trunk. No chunk is loaded for any of this:
+ * what is not loaded yet is dealt with when it is finished in turn. Only newly generated chunks
+ * are handled.
  */
 public final class CanopyClearing {
 	/** Blocks around the camp that are cleared as well, so that it does not stand in a shaft. */
@@ -42,6 +43,18 @@ public final class CanopyClearing {
 
 	/** Height above the camp's ground that is cleared; taller than any tree that grows beside one. */
 	static final int HEIGHT = 32;
+
+	/** How far below the camp's ground a trunk beside it may start, where the terrain falls away. */
+	static final int BELOW = 3;
+
+	/** Leaves are looked for this far around the top of a trunk. */
+	static final int CROWN_RADIUS = 2;
+
+	/** A tree beside the camp with fewer leaves left than this is removed. */
+	static final int MIN_CROWN = 6;
+
+	/** The blocks a camp's ground layer is made of. No tree grows on them. */
+	private static final Set<Block> CAMP_GROUND = Set.of(Blocks.PACKED_MUD, Blocks.GRAVEL);
 
 	private record Pending(ResourceKey<Level> dimension, ChunkPos chunk) {
 	}
@@ -54,7 +67,7 @@ public final class CanopyClearing {
 
 	public static void register() {
 		// Not cleared right here: changing blocks while a chunk is being handed over is asking
-		// for trouble, and the camp's own data may sit in a neighbouring chunk.
+		// for trouble, and the camp reaches into neighbouring chunks.
 		ServerChunkEvents.CHUNK_GENERATE.register((level, chunk) -> {
 			if (!chunk.getAllReferences().isEmpty()) {
 				PENDING.add(new Pending(level.dimension(), chunk.getPos()));
@@ -82,7 +95,9 @@ public final class CanopyClearing {
 	}
 
 	/**
-	 * Removes the leaves above every bandit camp that reaches into the chunk, within that chunk.
+	 * Clears the sky above every bandit camp near the chunk. The whole camp is gone over each
+	 * time one of the chunks around it is finished, as far as its chunks are loaded by then, so
+	 * that the last of them sees it complete.
 	 *
 	 * @return the number of blocks removed
 	 */
@@ -97,7 +112,7 @@ public final class CanopyClearing {
 
 		for (StructureStart start : level.structureManager().startsForStructure(chunk.x(), chunk.z(), camp.value())) {
 			if (start.isValid() && !start.getPieces().isEmpty()) {
-				removed += clearAbove(level, start.getPieces().get(0).getBoundingBox(), chunk);
+				removed += clearAbove(level, start.getPieces().get(0).getBoundingBox());
 			}
 		}
 
@@ -105,42 +120,34 @@ public final class CanopyClearing {
 	}
 
 	/**
-	 * Removes leaves and vines above a camp, from just above its ground upwards, and the snow
-	 * that lay on them.
+	 * Removes leaves and vines above a camp and one block around it, from just above its ground
+	 * upwards, with the snow that lay on them. Then removes the trees this left bare: those that
+	 * took root inside the camp, on a spot where the camp kept the terrain, and those beside it
+	 * that have hardly a leaf left. Blocks in chunks that are not loaded are left alone.
 	 *
-	 * @param camp   the blocks the camp occupies
-	 * @param within if not null, only blocks in this chunk are touched
+	 * @param camp the blocks the camp occupies
 	 * @return the number of blocks removed
 	 */
-	public static int clearAbove(ServerLevel level, BoundingBox camp, ChunkPos within) {
-		int minX = camp.minX() - MARGIN;
-		int maxX = camp.maxX() + MARGIN;
-		int minZ = camp.minZ() - MARGIN;
-		int maxZ = camp.maxZ() + MARGIN;
-
-		if (within != null) {
-			minX = Math.max(minX, within.getMinBlockX());
-			maxX = Math.min(maxX, within.getMaxBlockX());
-			minZ = Math.max(minZ, within.getMinBlockZ());
-			maxZ = Math.min(maxZ, within.getMaxBlockZ());
-		}
-
+	public static int clearAbove(ServerLevel level, BoundingBox camp) {
 		int minY = camp.minY() + 1;
 		int maxY = Math.min(camp.minY() + HEIGHT, level.getMaxY());
 		int removed = 0;
 		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
 
-		for (int x = minX; x <= maxX; x++) {
-			for (int z = minZ; z <= maxZ; z++) {
+		for (int x = camp.minX() - MARGIN; x <= camp.maxX() + MARGIN; x++) {
+			for (int z = camp.minZ() - MARGIN; z <= camp.maxZ() + MARGIN; z++) {
+				if (!isLoaded(level, x, z)) {
+					continue;
+				}
+
 				boolean removedBelow = false;
 
 				for (int y = minY; y <= maxY; y++) {
 					BlockState state = level.getBlockState(pos.set(x, y, z));
-					boolean remove = state.is(BlockTags.LEAVES) || state.is(Blocks.VINE) || (removedBelow && state.is(Blocks.SNOW));
+					boolean remove = isFoliage(state) || (removedBelow && state.is(Blocks.SNOW));
 
 					if (remove) {
-						// No shape updates: the neighbours may lie in a chunk that is not loaded.
-						level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+						remove(level, pos);
 						removed++;
 					}
 
@@ -149,6 +156,93 @@ public final class CanopyClearing {
 			}
 		}
 
+		for (int x = camp.minX() - MARGIN; x <= camp.maxX() + MARGIN; x++) {
+			for (int z = camp.minZ() - MARGIN; z <= camp.maxZ() + MARGIN; z++) {
+				removed += removeBareTree(level, camp, x, z, maxY);
+			}
+		}
+
 		return removed;
+	}
+
+	/**
+	 * Removes the trunk in one column, and the leaves left around its top, if it is a tree that
+	 * the clearing left bare.
+	 */
+	private static int removeBareTree(ServerLevel level, BoundingBox camp, int x, int z, int maxY) {
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		boolean inside = x >= camp.minX() && x <= camp.maxX() && z >= camp.minZ() && z <= camp.maxZ();
+
+		// On the camp's own ground stands the camp: its palisade is made of logs too.
+		if (!isLoaded(level, x, z) || (inside && CAMP_GROUND.contains(level.getBlockState(pos.set(x, camp.minY(), z)).getBlock()))) {
+			return 0;
+		}
+
+		int bottom = Integer.MAX_VALUE;
+		int top = Integer.MIN_VALUE;
+
+		for (int y = camp.minY() - BELOW; y <= maxY; y++) {
+			if (level.getBlockState(pos.set(x, y, z)).is(BlockTags.LOGS)) {
+				bottom = Math.min(bottom, y);
+				top = y;
+			}
+		}
+
+		if (top == Integer.MIN_VALUE) {
+			return 0;
+		}
+
+		// What is left of the crown: the leaves around the top of the trunk.
+		List<BlockPos> crown = new ArrayList<>();
+
+		for (int dx = -CROWN_RADIUS; dx <= CROWN_RADIUS; dx++) {
+			for (int dz = -CROWN_RADIUS; dz <= CROWN_RADIUS; dz++) {
+				if (!isLoaded(level, x + dx, z + dz)) {
+					// Judged again when that chunk is finished.
+					return 0;
+				}
+
+				for (int y = top - 3; y <= top + 2; y++) {
+					if (isFoliage(level.getBlockState(pos.set(x + dx, y, z + dz)))) {
+						crown.add(pos.immutable());
+					}
+				}
+			}
+		}
+
+		if (!inside && crown.size() >= MIN_CROWN) {
+			return 0;
+		}
+
+		int removed = 0;
+
+		for (int y = bottom; y <= top + 1; y++) {
+			BlockState state = level.getBlockState(pos.set(x, y, z));
+
+			if (state.is(BlockTags.LOGS) || (y == top + 1 && state.is(Blocks.SNOW))) {
+				remove(level, pos);
+				removed++;
+			}
+		}
+
+		for (BlockPos leaf : crown) {
+			remove(level, leaf);
+			removed++;
+		}
+
+		return removed;
+	}
+
+	private static boolean isFoliage(BlockState state) {
+		return state.is(BlockTags.LEAVES) || state.is(Blocks.VINE);
+	}
+
+	private static boolean isLoaded(ServerLevel level, int x, int z) {
+		return level.getChunkSource().getChunkNow(x >> 4, z >> 4) != null;
+	}
+
+	private static void remove(ServerLevel level, BlockPos pos) {
+		// No shape updates: the neighbours may lie in a chunk that is not loaded.
+		level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
 	}
 }

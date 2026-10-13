@@ -260,6 +260,9 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 			server.runCommand("wildfront reload");
 			server.runCommand("difficulty normal");
 			server.runCommand("gamemode spectator " + player);
+			// The player hangs in the air whenever it is in survival mode below; on a slow machine
+			// it reaches the ground before it is a spectator again, and must survive that.
+			server.runCommand("effect give " + player + " minecraft:resistance 600 4 true");
 			server.runCommand("tp " + player + " " + located.getX() + " 200 " + located.getZ());
 			world.getConnection().waitForChunksRender();
 
@@ -336,6 +339,7 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 			}
 
 			server.runCommand("kill @e[tag=" + CampManager.GUARD_TAG + "]");
+			server.runCommand("effect clear " + player + " minecraft:resistance");
 			server.runCommand("wildfront reload");
 		}
 	}
@@ -351,6 +355,7 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 		List<CampSurvey.Camp> wooded = survey.camps().stream().filter(CampSurvey.Camp::wooded).limit(WOODED_CAMPS_TO_VISIT).toList();
 		check(!wooded.isEmpty(), "expected at least one bandit camp in a forest or taiga among " + survey.camps().size() + " camps");
 		int overhanging = 0;
+		int standing = 0;
 
 		for (CampSurvey.Camp camp : wooded) {
 			BlockPos located = camp.start();
@@ -361,11 +366,39 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 			BlockPos fire = server.computeOnServer(s -> findBlock(s.overworld(), located, Blocks.CAMPFIRE));
 			check(fire != null, "the bandit camp at " + located.toShortString() + " should have generated its fire");
 			int leaves = server.computeOnServer(s -> leavesOver(s.overworld(), fire));
-			System.out.println("[WildfrontClientGameTest] wooded bandit camp at " + fire.toShortString() + ": " + leaves + " leaf block(s) over it");
+			int trunks = server.computeOnServer(s -> treeLogsIn(s.overworld(), fire));
+			System.out.println("[WildfrontClientGameTest] wooded bandit camp at " + fire.toShortString() + ": " + leaves + " leaf block(s) over it, "
+					+ trunks + " log(s) of trees standing in it");
 			overhanging += leaves;
+			standing += trunks;
 		}
 
 		check(overhanging == 0, overhanging + " leaf block(s) hang over " + wooded.size() + " bandit camps in wooded biomes");
+		check(standing == 0, standing + " log(s) of bare trees stand in " + wooded.size() + " bandit camps in wooded biomes");
+	}
+
+	/**
+	 * Counts upright logs within the nine by nine blocks of a bandit camp that do not stand on the
+	 * camp's own ground: the palisade does, a tree that took root in a corner of the camp does not.
+	 */
+	private static int treeLogsIn(ServerLevel level, BlockPos fire) {
+		int logs = 0;
+
+		for (BlockPos column : BlockPos.betweenClosed(fire.offset(-4, -1, -4), fire.offset(4, -1, 4))) {
+			if (CAMP_GROUND.contains(level.getBlockState(column).getBlock())) {
+				continue;
+			}
+
+			for (int dy = -1; dy <= 21; dy++) {
+				BlockState state = level.getBlockState(column.above(dy));
+
+				if (state.is(BlockTags.LOGS) && state.hasProperty(RotatedPillarBlock.AXIS) && state.getValue(RotatedPillarBlock.AXIS) == Direction.Axis.Y) {
+					logs++;
+				}
+			}
+		}
+
+		return logs;
 	}
 
 	/**

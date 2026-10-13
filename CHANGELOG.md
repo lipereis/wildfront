@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.2
+
+### Fixed
+
+- **No bare tree trunks in bandit camps.** Since 0.3.1 the leaves above a bandit camp are
+  removed, which left trees that had taken root on a corner of the camp standing as bare poles.
+  Such trees are now removed with their trunk, as are trees right beside a camp that have hardly
+  a leaf left. Affects newly generated chunks only.
+
 ## 0.3.1
 
 ### Fixed

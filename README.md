@@ -4,7 +4,7 @@ A Minecraft Java Edition mod (Fabric) about dynamic exploration: rare world even
 discoveries and abandoned places that make the world feel unpredictable and alive, without
 replacing vanilla survival.
 
-**Version 0.3.1** for Minecraft 26.3 (Fabric). It adds:
+**Version 0.3.2** for Minecraft 26.3 (Fabric). It adds:
 
 - **Mysterious Discovery**, a dynamic event: a forgotten cache appears near a player who is out
   exploring, the player is told which way to look, and whoever opens it is rewarded.
@@ -22,7 +22,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full list of features and known limitat
 ## Installing
 
 1. Install [Fabric Loader](https://fabricmc.net/use/) 0.19.5 or newer for Minecraft 26.3.
-2. Download `wildfront-0.3.1+mc26.3.jar` from the
+2. Download `wildfront-0.3.2+mc26.3.jar` from the
    [latest release](https://github.com/lipereis/wildfront/releases/latest) (not the `-sources` file).
 3. Put it and [Fabric API](https://modrinth.com/mod/fabric-api) in the `mods` folder of the game
    directory that your Fabric installation uses.
@@ -107,7 +107,7 @@ To confirm the mod loaded, look for these lines in the console or in `run/logs/l
 
 ```
 [Wildfront] Registered 1 event(s): [mysterious_discovery]
-[Wildfront] Initialized (version 0.3.1+mc26.3, environment CLIENT)
+[Wildfront] Initialized (version 0.3.2+mc26.3, environment CLIENT)
 [Wildfront] Client initialized
 ```
 
@@ -315,7 +315,9 @@ barrel, a practice target and a chest. It is guarded.
 - **Open sky.** In forests the crowns of the trees around a camp would close over it and hang
   down between the tents, as the game grows trees after it builds structures. The mod removes
   leaves and vines above a bandit camp, and one block around it, as soon as its chunks are
-  finished. Trunks and branches are left alone. Abandoned camps keep their canopy.
+  finished. A tree that this leaves bare is removed with its trunk: one that took root on a
+  corner of the camp where the terrain was kept, or one right beside it with fewer than six
+  leaves left. Other trunks and branches are left alone. Abandoned camps keep their canopy.
 - `/wildfront camp list` shows the camps visited so far and how many guards each has left.
 
 Which camps were visited and cleared is stored in the world save. The count of guards left only
@@ -439,8 +441,8 @@ docs/images/           screenshots taken by the client game test
 5. Commit, push and wait for the build workflow to pass. Then tag and push the tag:
 
    ```
-   git tag v0.3.1
-   git push origin v0.3.1
+   git tag v0.3.2
+   git push origin v0.3.2
    ```
 
    The release workflow builds the tagged commit, runs the tests, and publishes a GitHub release

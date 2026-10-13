@@ -29,7 +29,6 @@ import net.minecraft.world.Difficulty;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.monster.PatrollingMonster;
-import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CampfireBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
@@ -328,10 +327,9 @@ public class BanditCampGameTest {
 		helper.setBlock(new BlockPos(3, 7, 3), Blocks.SNOW);            // lying on those leaves
 		helper.setBlock(new BlockPos(1, 5, 5), Blocks.OAK_LEAVES);      // over the margin around the camp
 		helper.setBlock(new BlockPos(0, 5, 3), Blocks.OAK_LEAVES);      // beyond the margin
-		helper.setBlock(new BlockPos(4, 5, 4), Blocks.OAK_LOG);         // a branch
 		helper.setBlock(new BlockPos(2, 2, 2), Blocks.HAY_BLOCK);      // the camp itself
 
-		int removed = CanopyClearing.clearAbove(level, camp, null);
+		int removed = CanopyClearing.clearAbove(level, camp);
 
 		helper.assertTrue(removed == 4, "three leaf blocks and the snow on one of them should be removed, but " + removed + " blocks were");
 		helper.assertBlockPresent(Blocks.AIR, new BlockPos(3, 3, 3));
@@ -340,16 +338,83 @@ public class BanditCampGameTest {
 		helper.assertBlockPresent(Blocks.AIR, new BlockPos(1, 5, 5));
 		helper.assertBlockPresent(Blocks.OAK_LEAVES, new BlockPos(3, 1, 3));
 		helper.assertBlockPresent(Blocks.OAK_LEAVES, new BlockPos(0, 5, 3));
-		helper.assertBlockPresent(Blocks.OAK_LOG, new BlockPos(4, 5, 4));
 		helper.assertBlockPresent(Blocks.HAY_BLOCK, new BlockPos(2, 2, 2));
+		helper.assertTrue(CanopyClearing.clearAbove(level, camp) == 0, "clearing a second time should find nothing left to do");
+		helper.succeed();
+	}
 
-		// Restricted to a chunk the camp does not reach into, nothing may be touched.
-		helper.setBlock(new BlockPos(3, 3, 3), Blocks.OAK_LEAVES);
-		ChunkPos elsewhere = new ChunkPos(ChunkPos.containing(low).x() + 3, ChunkPos.containing(low).z());
-		helper.assertTrue(CanopyClearing.clearAbove(level, camp, elsewhere) == 0, "a chunk the camp does not reach into should be left alone");
-		helper.assertBlockPresent(Blocks.OAK_LEAVES, new BlockPos(3, 3, 3));
-		helper.assertTrue(CanopyClearing.clearAbove(level, camp, ChunkPos.containing(helper.absolutePos(new BlockPos(3, 3, 3)))) == 1,
-				"the chunk the leaves are in should be cleared");
+	@GameTest
+	public void treesLeftBareByTheClearingAreRemoved(GameTestHelper helper) {
+		ServerLevel level = helper.getLevel();
+		// A camp of three by three blocks at 2..4. Its ground layer, at height 1, is packed mud
+		// except for the corner at 4, 4, where the camp keeps the terrain.
+		BoundingBox camp = BoundingBox.fromCorners(helper.absolutePos(new BlockPos(2, 1, 2)), helper.absolutePos(new BlockPos(4, 3, 4)));
+
+		for (int x = 2; x <= 4; x++) {
+			for (int z = 2; z <= 4; z++) {
+				helper.setBlock(new BlockPos(x, 1, z), x == 4 && z == 4 ? Blocks.DIRT : Blocks.PACKED_MUD);
+			}
+		}
+
+		// The palisade: logs on the camp's own ground.
+		helper.setBlock(new BlockPos(2, 2, 2), Blocks.SPRUCE_LOG);
+		helper.setBlock(new BlockPos(2, 3, 2), Blocks.SPRUCE_LOG);
+
+		// A tree rooted in the corner of the camp, with the outer fringe of its crown.
+		for (int y = 2; y <= 5; y++) {
+			helper.setBlock(new BlockPos(4, y, 4), Blocks.BIRCH_LOG);
+		}
+
+		helper.setBlock(new BlockPos(4, 6, 4), Blocks.BIRCH_LEAVES);
+
+		for (int z = 2; z <= 6; z++) {
+			helper.setBlock(new BlockPos(6, 5, z), Blocks.BIRCH_LEAVES);
+			helper.setBlock(new BlockPos(6, 4, z), Blocks.BIRCH_LEAVES);
+		}
+
+		// A tree beside the camp that keeps the outer half of its crown.
+		for (int y = 1; y <= 4; y++) {
+			helper.setBlock(new BlockPos(1, y, 3), Blocks.OAK_LOG);
+		}
+
+		for (int z = 1; z <= 5; z++) {
+			helper.setBlock(new BlockPos(0, 4, z), Blocks.OAK_LEAVES);
+			helper.setBlock(new BlockPos(0, 3, z), Blocks.OAK_LEAVES);
+		}
+
+		// A tree beside the camp whose crown was all over the camp, bar two leaves.
+		for (int y = 1; y <= 4; y++) {
+			helper.setBlock(new BlockPos(3, y, 1), Blocks.OAK_LOG);
+		}
+
+		helper.setBlock(new BlockPos(3, 5, 1), Blocks.OAK_LEAVES);
+		helper.setBlock(new BlockPos(3, 4, 0), Blocks.OAK_LEAVES);
+		helper.setBlock(new BlockPos(4, 4, 0), Blocks.OAK_LEAVES);
+
+		CanopyClearing.clearAbove(level, camp);
+
+		helper.assertBlockPresent(Blocks.SPRUCE_LOG, new BlockPos(2, 2, 2));
+		helper.assertBlockPresent(Blocks.SPRUCE_LOG, new BlockPos(2, 3, 2));
+
+		for (int y = 2; y <= 6; y++) {
+			helper.assertBlockPresent(Blocks.AIR, new BlockPos(4, y, 4));
+		}
+
+		for (int z = 2; z <= 6; z++) {
+			helper.assertBlockPresent(Blocks.AIR, new BlockPos(6, 5, z));
+			helper.assertBlockPresent(Blocks.AIR, new BlockPos(6, 4, z));
+		}
+
+		helper.assertBlockPresent(Blocks.DIRT, new BlockPos(4, 1, 4));
+
+		for (int y = 1; y <= 4; y++) {
+			helper.assertBlockPresent(Blocks.OAK_LOG, new BlockPos(1, y, 3));
+			helper.assertBlockPresent(Blocks.AIR, new BlockPos(3, y, 1));
+		}
+
+		helper.assertBlockPresent(Blocks.OAK_LEAVES, new BlockPos(0, 4, 3));
+		helper.assertBlockPresent(Blocks.AIR, new BlockPos(3, 4, 0));
+		helper.assertBlockPresent(Blocks.AIR, new BlockPos(4, 4, 0));
 		helper.succeed();
 	}
 

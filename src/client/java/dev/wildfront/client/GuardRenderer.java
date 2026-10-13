@@ -9,6 +9,7 @@ import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.HumanoidMobRenderer;
 import net.minecraft.client.renderer.entity.state.HumanoidRenderState;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.entity.HumanoidArm;
 
 /**
  * Draws a guard as a player-shaped figure wearing the guard skin. The model is the game's own
@@ -30,5 +31,15 @@ public class GuardRenderer extends HumanoidMobRenderer<GuardEntity, HumanoidRend
 	@Override
 	public HumanoidRenderState createRenderState() {
 		return new HumanoidRenderState();
+	}
+
+	@Override
+	protected HumanoidModel.ArmPose getArmPose(GuardEntity guard, HumanoidArm arm) {
+		// An archer that has a target holds its bow drawn, like a skeleton.
+		if (guard.getMainArm() == arm && guard.isAggressive() && guard.isArcher()) {
+			return HumanoidModel.ArmPose.BOW_AND_ARROW;
+		}
+
+		return super.getArmPose(guard, arm);
 	}
 }

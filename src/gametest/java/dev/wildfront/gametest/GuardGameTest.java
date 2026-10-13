@@ -2,6 +2,8 @@ package dev.wildfront.gametest;
 
 import java.util.List;
 
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+
 import dev.wildfront.entity.GuardEntity;
 import dev.wildfront.registry.WildfrontEntities;
 
@@ -18,6 +20,7 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
@@ -98,6 +101,68 @@ public class GuardGameTest {
 			helper.assertTrue(creative.getHealth() == creative.getMaxHealth(), "the creative player should be unharmed");
 			GameTestSupport.remove(helper, creative, survivor);
 			guard.discard();
+		});
+	}
+
+	@GameTest(maxTicks = 400)
+	public void guardWithABowShootsFromADistance(GameTestHelper helper) {
+		GameTestSupport.buildFloor(helper);
+		ServerLevel level = helper.getLevel();
+		GuardEntity guard = spawnGuard(helper, 1, 1, 1);
+		guard.equip(GuardEntity.Role.RANGED);
+		// It must not win by walking up to the player: an archer without legs can only shoot.
+		guard.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(0.0);
+		ServerPlayer survivor = GameTestSupport.addPlayer(helper, GameType.SURVIVAL, 6, 1, 6);
+		float healthBefore = survivor.getHealth();
+		AABB area = new AABB(helper.absolutePos(new BlockPos(0, 0, 0))).inflate(12);
+
+		helper.assertTrue(guard.isArcher(), "a guard equipped for the ranged role should hold a bow but holds " + guard.getMainHandItem());
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(survivor.getHealth() < healthBefore, "the archer should hit the survival player, who still has " + survivor.getHealth() + " health");
+			helper.assertTrue(guard.distanceTo(survivor) > 4.0F, "the archer should have hit from a distance, but is " + guard.distanceTo(survivor) + " blocks away");
+			level.getEntitiesOfClass(AbstractArrow.class, area).forEach(AbstractArrow::discard);
+			GameTestSupport.remove(helper, survivor);
+			guard.discard();
+		});
+	}
+
+	@GameTest(maxTicks = 400)
+	public void summonedGuardsAreSwordsmenUnlessGivenABow(GameTestHelper helper) throws CommandSyntaxException {
+		GameTestSupport.buildFloor(helper);
+		ServerLevel level = helper.getLevel();
+
+		if (level.getDifficulty() == Difficulty.PEACEFUL) {
+			level.getServer().setDifficulty(Difficulty.NORMAL, true);
+		}
+
+		BlockPos swordPos = helper.absolutePos(new BlockPos(1, 1, 6));
+		BlockPos bowPos = helper.absolutePos(new BlockPos(1, 1, 1));
+		AABB area = new AABB(helper.absolutePos(new BlockPos(0, 0, 0))).inflate(12);
+		var console = level.getServer().createCommandSourceStack().withSuppressedOutput();
+		var dispatcher = level.getServer().getCommands().getDispatcher();
+
+		dispatcher.execute("summon wildfront:guard " + swordPos.getX() + " " + swordPos.getY() + " " + swordPos.getZ() + " {NoAI:1b,Tags:[\"wf-summon-sword\"]}", console);
+		dispatcher.execute("summon wildfront:guard " + bowPos.getX() + " " + bowPos.getY() + " " + bowPos.getZ()
+				+ " {Tags:[\"wf-summon-bow\"],equipment:{mainhand:{id:\"minecraft:bow\"}}}", console);
+
+		List<GuardEntity> summoned = level.getEntitiesOfClass(GuardEntity.class, area, guard -> guard.entityTags().contains("wf-summon-bow"));
+		helper.assertTrue(summoned.size() == 1, "the summon command with a bow should create one guard, but created " + summoned.size());
+		GuardEntity archer = summoned.get(0);
+		helper.assertTrue(archer.isArcher(), "a guard summoned with a bow should be an archer but holds " + archer.getMainHandItem());
+		// Rooted to the spot, so that only its arrows can reach the player.
+		archer.getAttribute(Attributes.MOVEMENT_SPEED).setBaseValue(0.0);
+
+		ServerPlayer survivor = GameTestSupport.addPlayer(helper, GameType.SURVIVAL, 6, 1, 6);
+		float healthBefore = survivor.getHealth();
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(survivor.getHealth() < healthBefore, "the summoned archer should shoot the survival player, who still has " + survivor.getHealth() + " health");
+			helper.assertTrue(archer.distanceTo(survivor) > 4.0F, "the summoned archer should have hit from a distance");
+			level.getEntitiesOfClass(AbstractArrow.class, area).forEach(AbstractArrow::discard);
+			GameTestSupport.remove(helper, survivor);
+			level.getEntitiesOfClass(GuardEntity.class, area, guard -> guard.entityTags().contains("wf-summon-bow") || guard.entityTags().contains("wf-summon-sword"))
+					.forEach(GuardEntity::discard);
 		});
 	}
 

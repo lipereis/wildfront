@@ -4,7 +4,7 @@ A Minecraft Java Edition mod (Fabric) about dynamic exploration: rare world even
 discoveries and abandoned places that make the world feel unpredictable and alive, without
 replacing vanilla survival.
 
-**Version 0.3.2** for Minecraft 26.3 (Fabric). It adds:
+**Version 0.4.0** for Minecraft 26.3 (Fabric). It adds:
 
 - **Mysterious Discovery**, a dynamic event: a forgotten cache appears near a player who is out
   exploring, the player is told which way to look, and whoever opens it is rewarded.
@@ -22,7 +22,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full list of features and known limitat
 ## Installing
 
 1. Install [Fabric Loader](https://fabricmc.net/use/) 0.19.5 or newer for Minecraft 26.3.
-2. Download `wildfront-0.3.2+mc26.3.jar` from the
+2. Download `wildfront-0.4.0+mc26.3.jar` from the
    [latest release](https://github.com/lipereis/wildfront/releases/latest) (not the `-sources` file).
 3. Put it and [Fabric API](https://modrinth.com/mod/fabric-api) in the `mods` folder of the game
    directory that your Fabric installation uses.
@@ -109,7 +109,7 @@ To confirm the mod loaded, look for these lines in the console or in `run/logs/l
 
 ```
 [Wildfront] Registered 1 event(s): [mysterious_discovery]
-[Wildfront] Initialized (version 0.3.2+mc26.3, environment CLIENT)
+[Wildfront] Initialized (version 0.4.0+mc26.3, environment CLIENT)
 [Wildfront] Client initialized
 ```
 
@@ -292,7 +292,8 @@ barrel, a practice target and a chest. It is guarded.
 
 ![A bandit camp with its guards on the plains](docs/images/bandit_camp.png)
 
-- **Guards.** Pillagers with crossbows and, from three guards up, one vindicator. They appear the
+- **Guards.** [Guards](#guard) of the mod's own: archers and, from three guards up, one
+  swordsman. They appear the
   first time a player in survival or adventure mode comes within `activationRadius` blocks, so a
   camp nobody visits costs nothing. A camp has `minGuards` on easy, `maxGuards` on hard and a
   random number in between on normal.
@@ -300,8 +301,8 @@ barrel, a practice target and a chest. It is guarded.
   has guards, the game removes them and the camp counts as unvisited again: it gets a fresh set
   of guards when a player comes near on a higher difficulty. Cleared camps stay cleared.
 - **Clearing.** When the last guard dies, players within 64 blocks are told the camp is cleared.
-  A cleared camp never gets guards again. Guards do not despawn, carry no banner and killing them
-  does not give Bad Omen.
+  A cleared camp never gets guards again. Guards do not despawn. Camps occupied before 0.4.0
+  keep the pillagers and vindicators that guarded them then; killing those clears the camp too.
 - **Loot.** The chest holds more than an abandoned camp's: arrows, food, coal, iron, gold and
   emeralds, always one worn piece of gear (crossbow, iron sword, shield, iron helmet or
   chestplate) and sometimes diamonds, a golden apple, a saddle or an enchanted book. Nothing
@@ -343,15 +344,18 @@ and wears the skin in `assets/wildfront/textures/entity/guard.png`.
 |-------|------|
 | ![A guard seen from the front](docs/images/guard_front.png) | ![A guard seen from the back](docs/images/guard_back.png) |
 
-- 24 health, 2 armour, carries an iron sword and deals 6 damage a hit with it on every
-  difficulty above peaceful. Sees players 24 blocks away.
+- 24 health, 2 armour. Sees players 24 blocks away.
+- How it fights follows from what it holds. With an **iron sword** it closes in and deals 6
+  damage a hit. With a **bow** it keeps its distance and shoots an arrow every two seconds, as a
+  skeleton does. Give it something else and it fights hand to hand with that.
 - Attacks players in survival and adventure mode on sight, calls other guards when hurt, and
   walks back to its post if it was given one. It does not burn in daylight.
 - Drops bread or arrows, and sometimes an emerald when a player killed it; 8 experience. The
   loot table is `data/wildfront/loot_table/entities/guard.json`.
 - Does not exist in peaceful worlds.
-- **Not used by camps yet.** Bandit camps are still guarded by pillagers and vindicators. For now
-  a guard only appears through `/summon wildfront:guard`. No biome spawns it.
+- Guards bandit camps. No biome spawns it otherwise. `/summon wildfront:guard` makes a
+  swordsman; an archer is
+  `/summon wildfront:guard ~ ~ ~ {equipment:{mainhand:{id:"minecraft:bow"}}}`.
 
 The model and all animations are the game's own player model (the classic one with four-pixel
 arms, which is what the skin is painted for); the mod only supplies the texture. A resource pack
@@ -467,8 +471,8 @@ docs/images/           screenshots taken by the client game test
 5. Commit, push and wait for the build workflow to pass. Then tag and push the tag:
 
    ```
-   git tag v0.3.2
-   git push origin v0.3.2
+   git tag v0.4.0
+   git push origin v0.4.0
    ```
 
    The release workflow builds the tagged commit, runs the tests, and publishes a GitHub release

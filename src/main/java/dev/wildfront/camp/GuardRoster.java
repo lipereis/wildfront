@@ -9,9 +9,9 @@ import java.util.function.DoubleSupplier;
  */
 public final class GuardRoster {
 	public enum Role {
-		/** Ranged: a pillager with a crossbow. */
+		/** Ranged: a guard with a bow. */
 		ARCHER,
-		/** Melee: a vindicator with an axe. */
+		/** Melee: a guard with a sword. */
 		BRUTE
 	}
 

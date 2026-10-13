@@ -12,6 +12,7 @@ import dev.wildfront.camp.CampManager;
 import dev.wildfront.camp.CampState;
 import dev.wildfront.camp.CanopyClearing;
 import dev.wildfront.config.HostileCampConfig;
+import dev.wildfront.entity.GuardEntity;
 import dev.wildfront.registry.WildfrontAttachments;
 import dev.wildfront.registry.WildfrontLootTables;
 import dev.wildfront.registry.WildfrontStructures;
@@ -26,9 +27,8 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.Difficulty;
-import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.monster.PatrollingMonster;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CampfireBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
@@ -188,14 +188,16 @@ public class BanditCampGameTest {
 			helper.assertTrue(guards.size() == activated.get().guardsLeft() && !guards.isEmpty(),
 					"the camp records " + activated.get().guardsLeft() + " guard(s) but " + guards.size() + " exist");
 			helper.assertTrue(guards.size() == 3, "three guards should fit on an open floor but " + guards.size() + " were spawned");
-			helper.assertTrue(guards.stream().filter(guard -> guard.getType() == EntityTypes.VINDICATOR).count() == 1
-					&& guards.stream().filter(guard -> guard.getType() == EntityTypes.PILLAGER).count() == 2, "three guards should be two pillagers and one vindicator");
+			helper.assertTrue(guards.stream().allMatch(guard -> guard instanceof GuardEntity), "every guard of a camp should be a wildfront:guard, but they are "
+					+ guards.stream().map(guard -> guard.getType().toShortString()).toList());
+			helper.assertTrue(guards.stream().filter(guard -> guard.getMainHandItem().is(Items.IRON_SWORD)).count() == 1
+					&& guards.stream().filter(guard -> guard.getMainHandItem().is(Items.BOW)).count() == 2, "three guards should be two archers and one swordsman, but they hold "
+					+ guards.stream().map(guard -> guard.getMainHandItem().toString()).toList());
 
 			for (Mob guard : guards) {
 				helper.assertTrue(guard.isPersistenceRequired(), "a guard must not despawn");
 				helper.assertTrue(guard.getHomeRadius() > 0 && guard.blockPosition().closerThan(center, 6), "a guard should start near the middle of its camp");
 				helper.assertFalse(guard.getMainHandItem().isEmpty(), "a guard should be armed");
-				helper.assertFalse(guard instanceof PatrollingMonster patroller && patroller.isPatrolLeader(), "a guard must not be a patrol leader, whose banner starts raids");
 			}
 
 			helper.assertTrue(CampManager.activate(level, center, now + 20, config(3, 40)).isEmpty(), "an occupied camp should not be activated again");

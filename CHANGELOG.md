@@ -1,18 +1,22 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
 ### Added
 
-- **Guard**, the mod's first own creature: a human guard with its own skin, 24 health and an
-  iron sword, hostile to players. Camps do not use it yet; it only appears through
-  `/summon wildfront:guard`.
+- **Guards.** Bandit camps are now held by human guards of the mod's own, with their own skin,
+  instead of pillagers and vindicators. A guard has 24 health and fights with what it holds:
+  swordsmen close in, archers keep their distance and shoot. A camp of two is two archers; from
+  three guards up one of them is a swordsman. Guards drop bread, arrows and sometimes an
+  emerald.
 
 ### Changed
 
 - **The mod must now be installed on clients too.** Until 0.3.2 a server could run Wildfront for
   players who did not have it. The guard is a new kind of entity, which every client has to know.
 - Worlds lose their guards if the mod is removed. Blocks placed by the mod stay, as before.
+- Camps that were occupied before this version keep their pillagers and vindicators. Camps
+  visited for the first time from now on get guards.
 
 ## 0.3.2
 

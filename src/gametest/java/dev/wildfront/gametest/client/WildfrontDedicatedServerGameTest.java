@@ -11,6 +11,7 @@ import com.mojang.datafixers.util.Pair;
 import dev.wildfront.config.ConfigManager;
 import dev.wildfront.discovery.ActiveCache;
 import dev.wildfront.discovery.DiscoveryManager;
+import dev.wildfront.entity.GuardEntity;
 import dev.wildfront.event.PlayerCooldowns;
 import dev.wildfront.registry.WildfrontEvents;
 import dev.wildfront.registry.WildfrontLootTables;
@@ -27,15 +28,18 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BarrelBlockEntity;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import net.minecraft.world.level.entity.EntityTypeTest;
 import net.minecraft.world.level.levelgen.structure.Structure;
 
 /**
  * Plays through the mod on a real dedicated server with a real client connected to it: command
- * permissions, a forced and an automatic event, finding and expiry of a cache, and a naturally
- * generated abandoned camp.
+ * permissions, a forced and an automatic event, finding and expiry of a cache, a naturally
+ * generated abandoned camp, and guards as the client sees them.
  *
  * <p>Starting a dedicated server requires accepting the Minecraft EULA
  * (https://aka.ms/MinecraftEULA). The test only runs when the build was started with
@@ -71,6 +75,7 @@ public class WildfrontDedicatedServerGameTest implements FabricClientGameTest {
 			forcedEventAndFinding(context, server, connection, player);
 			automaticEventAndExpiry(context, server, player);
 			naturallyGeneratedCamp(context, server, connection, player);
+			guardsOverTheNetwork(context, server, connection, player);
 			System.out.println("[WildfrontDedicatedServerGameTest] PASSED");
 		}
 	}
@@ -211,6 +216,59 @@ public class WildfrontDedicatedServerGameTest implements FabricClientGameTest {
 		connection.waitForChunksRender();
 		context.waitTicks(40);
 		context.takeScreenshot("6_dedicated_server_camp");
+	}
+
+	/**
+	 * Summons a swordsman and an archer on the server and waits until the client, on the other
+	 * side of a real connection, knows both as guards holding what the server gave them.
+	 */
+	private static void guardsOverTheNetwork(ClientGameTestContext context, TestDedicatedServerContext server,
+			TestDedicatedServerConnection connection, String player) {
+		server.runCommand("gamemode spectator " + player);
+		server.runCommand("difficulty normal");
+		BlockPos at = server.computeOnServer(s -> s.getPlayerList().getPlayerByName(player).blockPosition());
+		int x = at.getX();
+		int y = 200;
+		int z = at.getZ();
+
+		server.runCommand("fill " + (x - 3) + " " + y + " " + (z - 5) + " " + (x + 3) + " " + y + " " + (z + 5) + " minecraft:smooth_stone");
+		server.runCommand("summon wildfront:guard " + (x - 0.5) + " " + (y + 1) + " " + (z + 0.5)
+				+ " {NoAI:1b,PersistenceRequired:1b,Rotation:[180f,0f],equipment:{mainhand:{id:\"minecraft:iron_sword\"}}}");
+		server.runCommand("summon wildfront:guard " + (x + 1.5) + " " + (y + 1) + " " + (z + 0.5)
+				+ " {NoAI:1b,PersistenceRequired:1b,Rotation:[180f,0f],equipment:{mainhand:{id:\"minecraft:bow\"}}}");
+
+		try {
+			check(server.computeOnServer(s -> s.overworld().getEntities(EntityTypeTest.forClass(GuardEntity.class), guard -> true).size()) == 2,
+					"the server should have two guards");
+			server.runCommand("tp " + player + " " + (x + 0.5) + " " + (y + 1.2) + " " + (z - 3.0) + " 0 5");
+			connection.waitForChunksRender();
+
+			context.waitFor(client -> {
+				if (client.level == null) {
+					return false;
+				}
+
+				int swords = 0;
+				int bows = 0;
+
+				for (Entity entity : client.level.entitiesForRendering()) {
+					if (entity instanceof GuardEntity guard) {
+						swords += guard.getMainHandItem().is(Items.IRON_SWORD) ? 1 : 0;
+						bows += guard.getMainHandItem().is(Items.BOW) ? 1 : 0;
+					}
+				}
+
+				return swords == 1 && bows == 1;
+			}, CLIENT_SYNC_TIMEOUT_TICKS);
+			System.out.println("[WildfrontDedicatedServerGameTest] the client sees a guard with a sword and a guard with a bow");
+
+			context.waitTicks(220);
+			context.takeScreenshot("5_server_guards");
+		} finally {
+			server.runCommand("kill @e[type=wildfront:guard]");
+			server.runCommand("kill @e[type=minecraft:item]");
+			server.runCommand("fill " + (x - 3) + " " + y + " " + (z - 5) + " " + (x + 3) + " " + y + " " + (z + 5) + " minecraft:air");
+		}
 	}
 
 	private static void check(boolean condition, String message) {

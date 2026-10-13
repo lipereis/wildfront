@@ -7,7 +7,9 @@ import java.util.Optional;
 import dev.wildfront.Wildfront;
 import dev.wildfront.config.HostileCampConfig;
 import dev.wildfront.discovery.SiteOffsets;
+import dev.wildfront.entity.GuardEntity;
 import dev.wildfront.registry.WildfrontAttachments;
+import dev.wildfront.registry.WildfrontEntities;
 import dev.wildfront.registry.WildfrontStructures;
 
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
@@ -24,8 +26,6 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.ChunkPos;
@@ -221,17 +221,15 @@ public final class CampManager {
 
 	private static boolean spawnGuard(ServerLevel level, BlockPos center, GuardRoster.Role role) {
 		BlockPos spot = findGuardSpot(level, center, level.getRandom());
-		EntityType<? extends Mob> type = role == GuardRoster.Role.BRUTE ? EntityTypes.VINDICATOR : EntityTypes.PILLAGER;
-		Mob guard = spot == null ? null : type.create(level, EntitySpawnReason.STRUCTURE);
+		GuardEntity guard = spot == null ? null : WildfrontEntities.GUARD.create(level, EntitySpawnReason.STRUCTURE);
 
 		if (guard == null) {
 			return false;
 		}
 
 		guard.snapTo(spot.getX() + 0.5, spot.getY(), spot.getZ() + 0.5, level.getRandom().nextFloat() * 360.0F, 0.0F);
-		// Gives the guard its weapon. The STRUCTURE reason also keeps it from becoming a patrol
-		// leader, whose banner would give its killer Bad Omen and start a raid.
 		guard.finalizeSpawn(level, level.getCurrentDifficultyAt(spot), EntitySpawnReason.STRUCTURE, null);
+		guard.equip(role == GuardRoster.Role.BRUTE ? GuardEntity.Role.MELEE : GuardEntity.Role.RANGED);
 		guard.setPersistenceRequired();
 		guard.setHomeTo(center, HOME_RADIUS);
 		guard.addTag(GUARD_TAG);

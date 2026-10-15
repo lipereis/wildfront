@@ -14,6 +14,7 @@ import dev.wildfront.config.ConfigManager;
 import dev.wildfront.discovery.ActiveCache;
 import dev.wildfront.discovery.DiscoveryManager;
 import dev.wildfront.entity.GuardEntity;
+import dev.wildfront.registry.WildfrontEntities;
 import dev.wildfront.registry.WildfrontLootTables;
 import dev.wildfront.registry.WildfrontStructures;
 import dev.wildfront.worldgen.HeightSpread;
@@ -30,6 +31,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
+import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -119,19 +121,30 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 		server.runCommand("fill " + (x - 3) + " " + y + " " + (z - 5) + " " + (x + 3) + " " + y + " " + (z + 5) + " minecraft:smooth_stone");
 		server.runCommand("summon wildfront:guard " + (x + 0.5) + " " + (y + 1) + " " + (z + 0.5));
 		server.runCommand("data merge entity @e[type=wildfront:guard,limit=1] {NoAI:1b,PersistenceRequired:1b,Rotation:[180f,0f]}");
+		// A chief beside it; there is no command for one, camps make them.
+		server.computeOnServer(s -> {
+			GuardEntity chief = WildfrontEntities.GUARD.create(s.overworld(), EntitySpawnReason.COMMAND);
+			chief.snapTo(x + 2.5, y + 1, z + 0.5, 180.0F, 0.0F);
+			chief.setYHeadRot(180.0F);
+			chief.setYBodyRot(180.0F);
+			chief.makeChief();
+			chief.setNoAi(true);
+			chief.setPersistenceRequired();
+			return s.overworld().addFreshEntity(chief);
+		});
 
 		try {
-			List<ItemStack> held = server.computeOnServer(s -> s.overworld().getEntities(EntityTypeTest.forClass(GuardEntity.class), guard -> true).stream()
+			List<ItemStack> held = server.computeOnServer(s -> s.overworld().getEntities(EntityTypeTest.forClass(GuardEntity.class), guard -> !guard.isChief()).stream()
 					.map(guard -> guard.getMainHandItem().copy()).toList());
 			check(held.size() == 1, "the summon command should create exactly one guard, but there are " + held.size());
 			check(held.get(0).is(Items.IRON_SWORD), "a summoned guard should carry an iron sword but holds " + held.get(0));
 
-			server.runCommand("tp " + player + " " + (x + 0.5) + " " + (y + 1.2) + " " + (z - 2.3) + " 0 5");
+			server.runCommand("tp " + player + " " + (x + 1.5) + " " + (y + 1.4) + " " + (z - 3.3) + " 0 5");
 			world.getConnection().waitForChunksRender();
 			// Long enough for the chat lines of the commands above to fade.
 			takeWorldScreenshot(context, "0_guard_front");
 
-			server.runCommand("tp " + player + " " + (x + 0.5) + " " + (y + 1.2) + " " + (z + 3.3) + " 180 5");
+			server.runCommand("tp " + player + " " + (x + 1.5) + " " + (y + 1.4) + " " + (z + 4.3) + " 180 5");
 			takeWorldScreenshot(context, "0_guard_back");
 		} finally {
 			server.runCommand("kill @e[type=wildfront:guard]");
@@ -290,7 +303,7 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 			original = Files.readString(config);
 			// Check players every second; no events, so nothing else happens around the camp.
 			Files.writeString(config, """
-					{ "checkIntervalSeconds": 1, "events": { "mysterious_discovery": { "enabled": false } } }
+					{ "checkIntervalSeconds": 1, "events": { "mysterious_discovery": { "enabled": false } }, "hostileCamps": { "chiefChance": 1 } }
 					""");
 		} catch (IOException e) {
 			throw new AssertionError("could not write the test config", e);
@@ -328,12 +341,19 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 			System.out.println("[WildfrontClientGameTest] bandit camp at " + occupied.center().toShortString() + " occupied by " + occupied.guardsLeft()
 					+ " guard(s), " + alive + " alive, fire " + offGround + " block(s) off ground level");
 			check(occupied.center().closerThan(fire, 3), "the camp's recorded middle " + occupied.center().toShortString() + " should be at its fire " + fire.toShortString());
-			check(occupied.guardsLeft() >= 2 && occupied.guardsLeft() <= 3, "a small camp should have 2 or 3 guards but has " + occupied.guardsLeft());
+			// The test config makes every camp a chief's camp: 2 or 3 guards and the chief.
+			check(occupied.chief() && occupied.stash().isPresent(), "with a chief chance of 1 the camp should be led by a chief and have a stash");
+			check(occupied.guardsLeft() >= 3 && occupied.guardsLeft() <= 4, "a small camp should have 2 or 3 guards and its chief, but has " + occupied.guardsLeft());
 			check(alive == occupied.guardsLeft(), "the camp records " + occupied.guardsLeft() + " guard(s) but " + alive + " are alive");
+			BlockPos stash = occupied.stash().get();
+			check(server.computeOnServer(s -> s.overworld().getBlockState(stash).is(Blocks.BARREL) && CampManager.isBarred(s.overworld(), stash)),
+					"the camp's barrel should be its barred stash");
 
 			server.runCommand("tp " + player + " " + (fire.getX() + 9.5) + " " + (fire.getY() + 7) + " " + (fire.getZ() + 9.5) + " 135 35");
 			world.getConnection().waitForChunksRender();
 			takeWorldScreenshot(context, "1_bandit_camp");
+			check(server.computeOnServer(s -> s.overworld().getEntities(EntityTypeTest.forClass(GuardEntity.class), GuardEntity::isChief).stream()
+					.anyMatch(chief -> chief.showsBossBarTo(s.getPlayerList().getPlayerByName(player)))), "a player near the camp should see the chief's boss bar");
 
 			// Ten more checks: nobody new may appear.
 			check(server.computeOnServer(s -> countGuards(s.overworld())) == occupied.guardsLeft(), "no further guards should appear at an occupied camp");
@@ -356,8 +376,8 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 			server.waitFor(s -> !CampManager.states(s.overworld()).isEmpty(), 200);
 			server.runCommand("gamemode spectator " + player);
 			int back = server.computeOnServer(s -> CampManager.states(s.overworld()).get(0).guardsLeft());
-			check(back >= 2 && back <= 3 && server.computeOnServer(s -> countGuards(s.overworld())) == back,
-					"after peaceful the camp should be occupied by 2 or 3 guards again, but it records " + back);
+			check(back >= 3 && back <= 4 && server.computeOnServer(s -> countGuards(s.overworld())) == back,
+					"after peaceful the camp should be occupied by its guards and chief again, but it records " + back);
 			System.out.println("[WildfrontClientGameTest] bandit camp occupied again by " + back + " guard(s) after peaceful");
 
 			server.runCommand("kill @e[tag=" + CampManager.GUARD_TAG + "]");

@@ -62,7 +62,7 @@ class ConfigParserTest {
 					"globalCooldownSeconds": 0,
 					"shareRadius": 0,
 					"discovery": { "minDistance": 8, "maxDistance": 8, "lifetimeSeconds": 30, "maxActive": 1 },
-					"hostileCamps": { "enabled": false, "activationRadius": 16, "minGuards": 1, "maxGuards": 8, "maxLivingGuards": 5 },
+					"hostileCamps": { "enabled": false, "activationRadius": 16, "minGuards": 1, "maxGuards": 8, "maxLivingGuards": 5, "chiefChance": 1 },
 					"events": {
 						"discovery": {
 							"enabled": false,
@@ -77,7 +77,7 @@ class ConfigParserTest {
 
 		assertEquals(new WildfrontConfig(false, 2, 0, 0, Map.of(
 				"discovery", new EventConfig(false, 15, 1.0, 0, TimeOfDay.NIGHT, Weather.RAIN),
-				"storm", STORM), new DiscoveryConfig(8, 8, 30, 1), new HostileCampConfig(false, 16, 1, 8, 5)), config);
+				"storm", STORM), new DiscoveryConfig(8, 8, 30, 1), new HostileCampConfig(false, 16, 1, 8, 5, 1.0)), config);
 		assertTrue(warnings.isEmpty());
 	}
 
@@ -232,10 +232,10 @@ class ConfigParserTest {
 	@Test
 	void hostileCampSectionFallsBackValueByValue() {
 		WildfrontConfig config = parse("""
-				{ "hostileCamps": { "enabled": "no", "activationRadius": 500, "minGuards": 2, "maxGuards": 6, "maxLivingGuards": 0 } }""");
+				{ "hostileCamps": { "enabled": "no", "activationRadius": 500, "minGuards": 2, "maxGuards": 6, "maxLivingGuards": 0, "chiefChance": 1.5 } }""");
 
-		assertEquals(new HostileCampConfig(true, HostileCampConfig.DEFAULT.activationRadius(), 2, 6, HostileCampConfig.DEFAULT.maxLivingGuards()), config.hostileCamps());
-		assertEquals(3, warnings.size(), warnings.toString());
+		assertEquals(new HostileCampConfig(true, HostileCampConfig.DEFAULT.activationRadius(), 2, 6, HostileCampConfig.DEFAULT.maxLivingGuards(), HostileCampConfig.DEFAULT.chiefChance()), config.hostileCamps());
+		assertEquals(4, warnings.size(), warnings.toString());
 	}
 
 	@Test

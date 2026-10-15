@@ -130,6 +130,20 @@ public class LootGameTest {
 	}
 
 	@GameTest
+	public void chiefStashIsRich(GameTestHelper helper) {
+		List<Content> stashes = draw(helper, WildfrontLootTables.CHIEF_STASH);
+
+		for (Content stash : stashes) {
+			helper.assertTrue(stash.total(Items.DIAMOND) >= 2 && stash.total(Items.DIAMOND) <= 4, "every stash should hold 2 to 4 diamonds, but one held " + stash.total(Items.DIAMOND));
+			helper.assertTrue(stash.total(Items.EMERALD) >= 6, "every stash should hold at least 6 emeralds, but one held " + stash.total(Items.EMERALD));
+		}
+
+		helper.assertTrue(chestsWith(stashes, Items.ENCHANTED_BOOK) > 0, "an enchanted book should turn up in " + DRAWS + " stashes");
+		helper.assertTrue(chestsWith(stashes, Items.BOOK) == 0, "plain books turned up in " + chestsWith(stashes, Items.BOOK) + " stashes");
+		helper.succeed();
+	}
+
+	@GameTest
 	public void banditCampLootHasItsStackSizesAndWear(GameTestHelper helper) {
 		List<Content> chests = draw(helper, WildfrontLootTables.BANDIT_CAMP_SMALL);
 

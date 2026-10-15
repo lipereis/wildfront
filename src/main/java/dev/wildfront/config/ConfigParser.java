@@ -91,7 +91,8 @@ public final class ConfigParser {
 				readBoolean(json, path, "enabled", defaults.enabled(), warnings),
 				readInt(json, path, "activationRadius", defaults.activationRadius(), MIN_ACTIVATION_RADIUS, MAX_ACTIVATION_RADIUS, warnings),
 				minGuards, maxGuards,
-				readInt(json, path, "maxLivingGuards", defaults.maxLivingGuards(), 1, MAX_LIVING_GUARDS, warnings));
+				readInt(json, path, "maxLivingGuards", defaults.maxLivingGuards(), 1, MAX_LIVING_GUARDS, warnings),
+				readDouble(json, path, "chiefChance", defaults.chiefChance(), 0.0, 1.0, warnings));
 	}
 
 	private static DiscoveryConfig parseDiscovery(JsonObject json, List<String> warnings) {
@@ -157,6 +158,7 @@ public final class ConfigParser {
 		camps.addProperty("minGuards", config.hostileCamps().minGuards());
 		camps.addProperty("maxGuards", config.hostileCamps().maxGuards());
 		camps.addProperty("maxLivingGuards", config.hostileCamps().maxLivingGuards());
+		camps.addProperty("chiefChance", config.hostileCamps().chiefChance());
 		root.add(HOSTILE_CAMPS, camps);
 		return root;
 	}

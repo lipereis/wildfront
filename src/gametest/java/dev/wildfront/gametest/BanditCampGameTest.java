@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.serialization.JsonOps;
 
@@ -14,23 +15,35 @@ import dev.wildfront.camp.CanopyClearing;
 import dev.wildfront.config.HostileCampConfig;
 import dev.wildfront.entity.GuardEntity;
 import dev.wildfront.registry.WildfrontAttachments;
+import dev.wildfront.registry.WildfrontEntities;
 import dev.wildfront.registry.WildfrontLootTables;
 import dev.wildfront.registry.WildfrontStructures;
 
+import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
+import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.Vec3i;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.Difficulty;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CampfireBlock;
+import net.minecraft.world.level.block.entity.BarrelBlockEntity;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.entity.EntityTypeTest;
@@ -38,6 +51,8 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Bandit camps on a real server: their data, their guards, and what happens when the guards die.
@@ -46,7 +61,11 @@ public class BanditCampGameTest {
 	private static final BlockPos CENTER = new BlockPos(3, 1, 3);
 
 	private static HostileCampConfig config(int guards, int maxLiving) {
-		return new HostileCampConfig(true, 48, guards, guards, maxLiving);
+		return new HostileCampConfig(true, 48, guards, guards, maxLiving, 0.0);
+	}
+
+	private static HostileCampConfig withChief(int guards) {
+		return new HostileCampConfig(true, 48, guards, guards, 200, 1.0);
 	}
 
 	private static List<? extends Mob> guardsOf(ServerLevel level, BlockPos center) {
@@ -275,6 +294,121 @@ public class BanditCampGameTest {
 	}
 
 	@GameTest(skyAccess = true)
+	public void chiefGuardsABarredStashUntilTheCampIsCleared(GameTestHelper helper) {
+		ServerLevel level = helper.getLevel();
+		ensureHostileWorld(level);
+		GameTestSupport.buildFloor(helper);
+		BlockPos center = helper.absolutePos(CENTER);
+		BlockPos stash = helper.absolutePos(new BlockPos(6, 1, 3));
+		helper.setBlock(new BlockPos(6, 1, 3), Blocks.BARREL);
+		ServerPlayer player = GameTestSupport.addPlayer(helper, GameType.SURVIVAL, 7, 1, 7);
+		BlockHitResult hit = new BlockHitResult(Vec3.atCenterOf(stash), Direction.UP, stash, false);
+
+		try {
+			CampState state = CampManager.activate(level, center, level.getGameTime(), withChief(2)).orElseThrow();
+			helper.assertTrue(state.chief(), "with a chief chance of 1 and a barrel the camp should be led by a chief");
+			helper.assertTrue(state.stash().equals(Optional.of(stash)), "the camp's barrel should be the stash, but the stash is " + state.stash());
+			helper.assertTrue(state.guardsLeft() == 3, "two guards and the chief should be counted, but " + state.guardsLeft() + " are");
+
+			List<GuardEntity> chiefs = guardsOf(level, center).stream().filter(guard -> guard instanceof GuardEntity g && g.isChief())
+					.map(guard -> (GuardEntity) guard).toList();
+			helper.assertTrue(chiefs.size() == 1, "exactly one guard should be the chief, but " + chiefs.size() + " are");
+			GuardEntity chief = chiefs.get(0);
+			helper.assertTrue(chief.getMaxHealth() == (float) GuardEntity.CHIEF_HEALTH && chief.getHealth() == chief.getMaxHealth(),
+					"the chief should have " + GuardEntity.CHIEF_HEALTH + " health but has " + chief.getHealth() + " of " + chief.getMaxHealth());
+			helper.assertTrue(chief.getMainHandItem().is(Items.DIAMOND_SWORD), "the chief should carry a diamond sword");
+			helper.assertTrue(chief.getItemBySlot(EquipmentSlot.HEAD).isEmpty() && chief.getItemBySlot(EquipmentSlot.CHEST).isEmpty(),
+					"the chief should wear no armour items, which would hide its skin");
+			helper.assertTrue(chief.getAttributeBaseValue(Attributes.ARMOR) == GuardEntity.CHIEF_ARMOR, "the chief should be armoured all the same");
+			helper.assertTrue(chief.getAttributeValue(Attributes.SCALE) == GuardEntity.CHIEF_SCALE, "the chief should be bigger than its guards");
+			helper.assertTrue(chief.getName().getString().equals("Camp Chief") || chief.getName().getString().equals("entity.wildfront.guard_chief"),
+					"the chief should be named Camp Chief, but is " + chief.getName().getString());
+
+			BarrelBlockEntity barrel = helper.getBlockEntity(new BlockPos(6, 1, 3), BarrelBlockEntity.class);
+			helper.assertTrue(WildfrontLootTables.CHIEF_STASH.equals(barrel.getLootTable()), "the stash should hold the chief's loot, but its loot table is " + barrel.getLootTable());
+
+			helper.assertTrue(CampManager.isBarred(level, stash), "the stash should be barred while the camp has guards");
+			helper.assertTrue(UseBlockCallback.EVENT.invoker().interact(player, level, InteractionHand.MAIN_HAND, hit) == InteractionResult.FAIL,
+					"a survival player must not open the stash while the camp has guards");
+			helper.assertFalse(PlayerBlockBreakEvents.BEFORE.invoker().beforeBlockBreak(level, player, stash, level.getBlockState(stash), barrel),
+					"a survival player must not break the stash while the camp has guards");
+			helper.assertFalse(CampManager.isBarred(level, center), "only the stash is barred");
+
+			guardsOf(level, center).forEach(guard -> guard.kill(level));
+			helper.assertTrue(CampManager.find(level, center).orElseThrow().cleared(), "the camp should be cleared when its guards and chief are dead");
+			helper.assertFalse(CampManager.isBarred(level, stash), "the stash should be open once the camp is cleared");
+			helper.assertTrue(UseBlockCallback.EVENT.invoker().interact(player, level, InteractionHand.MAIN_HAND, hit) == InteractionResult.PASS,
+					"a survival player should be able to open the stash once the camp is cleared");
+		} finally {
+			GameTestSupport.remove(helper, player);
+			CampManager.forget(level, center);
+			helper.killAllEntities();
+		}
+
+		helper.succeed();
+	}
+
+	@GameTest(skyAccess = true)
+	public void noChiefWithoutAStashOrWhenTheChanceSaysNo(GameTestHelper helper) {
+		ServerLevel level = helper.getLevel();
+		ensureHostileWorld(level);
+		GameTestSupport.buildFloor(helper);
+		BlockPos center = helper.absolutePos(CENTER);
+
+		try {
+			// No barrel anywhere near: nothing for a chief to guard.
+			CampState withoutStash = CampManager.activate(level, center, level.getGameTime(), withChief(2)).orElseThrow();
+			helper.assertFalse(withoutStash.chief(), "a camp without a stash should not get a chief");
+			helper.assertTrue(withoutStash.guardsLeft() == 2 && withoutStash.stash().isEmpty(), "a camp without a chief has only its guards");
+			CampManager.forget(level, center);
+
+			helper.setBlock(new BlockPos(6, 1, 3), Blocks.BARREL);
+			CampState noChance = CampManager.activate(level, center, level.getGameTime(), config(2, 200)).orElseThrow();
+			helper.assertFalse(noChance.chief(), "with a chief chance of 0 no camp should get a chief");
+			helper.assertFalse(CampManager.isBarred(level, helper.absolutePos(new BlockPos(6, 1, 3))), "a camp without a chief bars nothing");
+		} finally {
+			CampManager.forget(level, center);
+			helper.killAllEntities();
+		}
+
+		helper.succeed();
+	}
+
+	@GameTest(skyAccess = true)
+	public void aGuardThatSpotsAPlayerAlertsItsCampOnly(GameTestHelper helper) {
+		ServerLevel level = helper.getLevel();
+		ensureHostileWorld(level);
+		GameTestSupport.buildFloor(helper);
+		BlockPos center = helper.absolutePos(CENTER);
+		ServerPlayer player = GameTestSupport.addPlayer(helper, GameType.SURVIVAL, 7, 1, 7);
+		GuardEntity stranger = WildfrontEntities.GUARD.create(level, EntitySpawnReason.COMMAND);
+		BlockPos strangerPos = helper.absolutePos(new BlockPos(0, 1, 7));
+		stranger.snapTo(strangerPos.getX() + 0.5, strangerPos.getY(), strangerPos.getZ() + 0.5, 0.0F, 0.0F);
+		stranger.setNoAi(true);
+		level.addFreshEntity(stranger);
+
+		try {
+			CampManager.activate(level, center, level.getGameTime(), config(3, 200)).orElseThrow();
+			List<GuardEntity> guards = guardsOf(level, center).stream().map(guard -> (GuardEntity) guard).toList();
+			guards.forEach(guard -> guard.setTarget(null));
+
+			guards.get(0).setTarget(player);
+
+			for (GuardEntity guard : guards) {
+				helper.assertTrue(guard.getTarget() == player, "every guard of the camp should go for the player once one spotted them, but one targets " + guard.getTarget());
+			}
+
+			helper.assertTrue(stranger.getTarget() == null, "a guard of no camp should not hear another camp's alarm");
+		} finally {
+			GameTestSupport.remove(helper, player);
+			CampManager.forget(level, center);
+			helper.killAllEntities();
+		}
+
+		helper.succeed();
+	}
+
+	@GameTest(skyAccess = true)
 	public void serverWideGuardLimitPostponesACamp(GameTestHelper helper) {
 		ServerLevel level = helper.getLevel();
 		ensureHostileWorld(level);
@@ -426,6 +560,17 @@ public class BanditCampGameTest {
 		JsonElement saved = CampState.CODEC.encodeStart(JsonOps.INSTANCE, state).result().orElseThrow();
 
 		helper.assertTrue(state.equals(CampState.CODEC.parse(JsonOps.INSTANCE, saved).result().orElse(null)), "a camp state should survive saving and loading: " + saved);
+
+		CampState chief = new CampState(new BlockPos(10, 64, -20), 3, 1234, true, Optional.of(new BlockPos(12, 64, -20)));
+		JsonElement savedChief = CampState.CODEC.encodeStart(JsonOps.INSTANCE, chief).result().orElseThrow();
+		helper.assertTrue(chief.equals(CampState.CODEC.parse(JsonOps.INSTANCE, savedChief).result().orElse(null)), "a chief's camp should survive saving and loading: " + savedChief);
+
+		// As saved by 0.4.0, before camps could have a chief.
+		JsonObject old = new JsonObject();
+		old.add("center", BlockPos.CODEC.encodeStart(JsonOps.INSTANCE, new BlockPos(10, 64, -20)).result().orElseThrow());
+		old.addProperty("guards_left", 2);
+		old.addProperty("activated_at", 1234L);
+		helper.assertTrue(state.equals(CampState.CODEC.parse(JsonOps.INSTANCE, old).result().orElse(null)), "a camp saved by 0.4.0 should load as a camp without a chief: " + old);
 		helper.assertTrue(new CampState(BlockPos.ZERO, 0, 0).cleared() && !state.cleared(), "a camp is cleared exactly when no guards are left");
 		helper.assertTrue(state.withOneGuardLess().guardsLeft() == 1 && new CampState(BlockPos.ZERO, 0, 0).withOneGuardLess().guardsLeft() == 0,
 				"guards are counted down to zero and no further");

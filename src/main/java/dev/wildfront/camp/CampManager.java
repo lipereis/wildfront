@@ -1,7 +1,10 @@
 package dev.wildfront.camp;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 import dev.wildfront.Wildfront;
@@ -10,9 +13,12 @@ import dev.wildfront.discovery.SiteOffsets;
 import dev.wildfront.entity.GuardEntity;
 import dev.wildfront.registry.WildfrontAttachments;
 import dev.wildfront.registry.WildfrontEntities;
+import dev.wildfront.registry.WildfrontLootTables;
 import dev.wildfront.registry.WildfrontStructures;
 
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
+import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
+import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
@@ -22,14 +28,20 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.Difficulty;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.RandomizableContainer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.entity.EntityTypeTest;
@@ -57,11 +69,25 @@ public final class CampManager {
 
 	static final int CLEARED_MESSAGE_RADIUS = 64;
 
+	/** How far from the middle of its camp a chief's stash may stand. */
+	static final int STASH_SEARCH = 5;
+
+	/** How far the alarm of a guard that spotted a player carries. */
+	public static final double ALARM_RADIUS = 32.0;
+
+	/** The alarm bell of one camp rings at most this often, in ticks. */
+	static final long ALARM_SOUND_INTERVAL = 200;
+
+	private static final Map<BlockPos, Long> LAST_ALARM = new HashMap<>();
+	private static boolean raisingAlarm;
+
 	private CampManager() {
 	}
 
 	public static void register() {
 		ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> onDeath(entity));
+		UseBlockCallback.EVENT.register((player, level, hand, hit) -> mayUseStash(player, level, hit.getBlockPos()) ? InteractionResult.PASS : InteractionResult.FAIL);
+		PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, blockEntity) -> mayUseStash(player, level, pos));
 	}
 
 	public static List<CampState> states(ServerLevel level) {
@@ -146,33 +172,118 @@ public final class CampManager {
 
 		// Guards of a camp that was vacated may have outlived it in a chunk that was not loaded.
 		// They take up their post again; nobody is added to them.
-		int survivors = guardsOf(level, center).size();
+		List<? extends Mob> survivors = guardsOf(level, center);
 
-		if (survivors > 0) {
-			return Optional.of(record(level, new CampState(center.immutable(), survivors, now)));
+		if (!survivors.isEmpty()) {
+			boolean chief = survivors.stream().anyMatch(guard -> guard instanceof GuardEntity g && g.isChief());
+			Optional<BlockPos> stash = chief ? findStash(level, center) : Optional.empty();
+			return Optional.of(record(level, new CampState(center.immutable(), survivors.size(), now, chief, stash)));
 		}
 
 		List<GuardRoster.Role> roster = GuardRoster.pick(config.minGuards(), config.maxGuards(), strength(level.getDifficulty()), level.getRandom()::nextDouble);
+		// A chief needs a stash to guard; every bandit camp layout has one, a camp built by hand may not.
+		Optional<BlockPos> stash = level.getRandom().nextDouble() < config.chiefChance() ? findStash(level, center) : Optional.empty();
 		int living = states(level).stream().mapToInt(CampState::guardsLeft).sum();
 
-		if (living + roster.size() > config.maxLivingGuards()) {
+		if (living + roster.size() + (stash.isPresent() ? 1 : 0) > config.maxLivingGuards()) {
 			return Optional.empty();
 		}
 
 		int spawned = 0;
 
 		for (GuardRoster.Role role : roster) {
-			if (spawnGuard(level, center, role)) {
+			if (spawnGuard(level, center, role, false)) {
 				spawned++;
 			}
 		}
+
+		boolean chief = stash.isPresent() && spawned > 0 && spawnGuard(level, center, GuardRoster.Role.BRUTE, true);
 
 		if (spawned == 0) {
 			Wildfront.LOGGER.warn("[Wildfront] Found no room for guards at the bandit camp at {}; trying again later", center.toShortString());
 			return Optional.empty();
 		}
 
-		return Optional.of(record(level, new CampState(center.immutable(), spawned, now)));
+		if (chief && level.getBlockEntity(stash.get()) instanceof RandomizableContainer container) {
+			container.setLootTable(WildfrontLootTables.CHIEF_STASH, level.getRandom().nextLong());
+		}
+
+		return Optional.of(record(level, new CampState(center.immutable(), spawned + (chief ? 1 : 0), now, chief, chief ? stash : Optional.empty())));
+	}
+
+	/**
+	 * @return the barrel of the camp around {@code center}, which a chief keeps his stash in
+	 */
+	static Optional<BlockPos> findStash(ServerLevel level, BlockPos center) {
+		for (BlockPos pos : BlockPos.betweenClosed(center.offset(-STASH_SEARCH, -1, -STASH_SEARCH), center.offset(STASH_SEARCH, 2, STASH_SEARCH))) {
+			if (level.getBlockState(pos).is(Blocks.BARREL)) {
+				return Optional.of(pos.immutable());
+			}
+		}
+
+		return Optional.empty();
+	}
+
+	/**
+	 * @return whether the block is the stash of a camp whose guards are still alive
+	 */
+	public static boolean isBarred(ServerLevel level, BlockPos pos) {
+		return states(level).stream().anyMatch(state -> state.bars(pos));
+	}
+
+	/**
+	 * Keeps players out of a chief's stash until the camp is cleared. Players in creative mode are
+	 * not stopped.
+	 */
+	private static boolean mayUseStash(Player player, Level level, BlockPos pos) {
+		if (!(level instanceof ServerLevel serverLevel) || player.isCreative() || player.isSpectator() || !isBarred(serverLevel, pos)) {
+			return true;
+		}
+
+		if (player instanceof ServerPlayer serverPlayer) {
+			serverPlayer.sendOverlayMessage(Component.translatableWithFallback("camp.wildfront.stash_barred",
+					"The chief's stash is barred. Defeat the camp first.").withStyle(ChatFormatting.RED));
+		}
+
+		return false;
+	}
+
+	/**
+	 * Called when a guard first spots a player: every guard of its camp nearby that is not busy
+	 * yet goes for that player too, and the camp's alarm sounds.
+	 */
+	public static void raiseAlarm(ServerLevel level, GuardEntity spotter, Player player) {
+		BlockPos camp = campOf(spotter);
+
+		if (camp == null || raisingAlarm) {
+			return;
+		}
+
+		raisingAlarm = true;
+
+		try {
+			List<GuardEntity> others = level.getEntitiesOfClass(GuardEntity.class, spotter.getBoundingBox().inflate(ALARM_RADIUS),
+					guard -> guard != spotter && guard.isAlive() && guard.getTarget() == null && camp.equals(campOf(guard)));
+			others.forEach(guard -> guard.setTarget(player));
+
+			Long last = LAST_ALARM.get(camp);
+			long now = level.getGameTime();
+
+			if (last == null || now - last >= ALARM_SOUND_INTERVAL) {
+				LAST_ALARM.put(camp, now);
+				level.playSound(null, spotter.getX(), spotter.getY(), spotter.getZ(), SoundEvents.BELL_BLOCK, SoundSource.HOSTILE, 2.0F, 0.8F);
+			}
+		} finally {
+			raisingAlarm = false;
+		}
+	}
+
+	/**
+	 * @return whether two entities guard the same camp; guards that belong to no camp, such as
+	 *         summoned ones, count as one camp
+	 */
+	public static boolean sameCamp(Entity a, Entity b) {
+		return Objects.equals(campOf(a), campOf(b));
 	}
 
 	private static CampState record(ServerLevel level, CampState state) {
@@ -219,7 +330,7 @@ public final class CampManager {
 		};
 	}
 
-	private static boolean spawnGuard(ServerLevel level, BlockPos center, GuardRoster.Role role) {
+	private static boolean spawnGuard(ServerLevel level, BlockPos center, GuardRoster.Role role, boolean chief) {
 		BlockPos spot = findGuardSpot(level, center, level.getRandom());
 		GuardEntity guard = spot == null ? null : WildfrontEntities.GUARD.create(level, EntitySpawnReason.STRUCTURE);
 
@@ -230,6 +341,10 @@ public final class CampManager {
 		guard.snapTo(spot.getX() + 0.5, spot.getY(), spot.getZ() + 0.5, level.getRandom().nextFloat() * 360.0F, 0.0F);
 		guard.finalizeSpawn(level, level.getCurrentDifficultyAt(spot), EntitySpawnReason.STRUCTURE, null);
 		guard.equip(role == GuardRoster.Role.BRUTE ? GuardEntity.Role.MELEE : GuardEntity.Role.RANGED);
+
+		if (chief) {
+			guard.makeChief();
+		}
 		guard.setPersistenceRequired();
 		guard.setHomeTo(center, HOME_RADIUS);
 		guard.addTag(GUARD_TAG);
@@ -269,7 +384,7 @@ public final class CampManager {
 		return CAMP_TAG_PREFIX + center.getX() + "_" + center.getY() + "_" + center.getZ();
 	}
 
-	private static BlockPos campOf(Entity guard) {
+	public static BlockPos campOf(Entity guard) {
 		for (String tag : guard.entityTags()) {
 			if (tag.startsWith(CAMP_TAG_PREFIX)) {
 				String[] parts = tag.substring(CAMP_TAG_PREFIX.length()).split("_");
@@ -308,7 +423,10 @@ public final class CampManager {
 	}
 
 	private static void onCleared(ServerLevel level, BlockPos center) {
-		Component message = Component.translatableWithFallback("camp.wildfront.cleared", "The camp falls silent. Its guards are gone for good.")
+		boolean chief = find(level, center).map(CampState::chief).orElse(false);
+		Component message = (chief
+				? Component.translatableWithFallback("camp.wildfront.cleared.chief", "The chief has fallen. The camp's stash is yours.")
+				: Component.translatableWithFallback("camp.wildfront.cleared", "The camp falls silent. Its guards are gone for good."))
 				.withStyle(ChatFormatting.GOLD);
 		Component overlay = Component.translatableWithFallback("camp.wildfront.cleared.overlay", "Camp cleared").withStyle(ChatFormatting.GOLD);
 

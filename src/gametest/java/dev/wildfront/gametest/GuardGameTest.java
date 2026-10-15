@@ -15,6 +15,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Difficulty;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.MobCategory;
@@ -72,6 +73,8 @@ public class GuardGameTest {
 
 		// The game applies what a held item adds to the attributes on the entity's next tick.
 		helper.runAfterDelay(5, () -> {
+			// A war cry in a test running next to this one may have made it stronger.
+			guard.removeAllEffects();
 			double damage = guard.getAttributeValue(Attributes.ATTACK_DAMAGE);
 			guard.discard();
 			helper.assertTrue(damage == 6.0, "a guard with its sword should deal 6 damage, but deals " + damage);
@@ -163,6 +166,71 @@ public class GuardGameTest {
 			GameTestSupport.remove(helper, survivor);
 			level.getEntitiesOfClass(GuardEntity.class, area, guard -> guard.entityTags().contains("wf-summon-bow") || guard.entityTags().contains("wf-summon-sword"))
 					.forEach(GuardEntity::discard);
+		});
+	}
+
+	@GameTest
+	public void chiefCallsAWarCryAtHalfHealthAndDropsItsReward(GameTestHelper helper) {
+		GameTestSupport.buildFloor(helper);
+		ServerLevel level = helper.getLevel();
+		GuardEntity chief = spawnGuard(helper, 3, 1, 3);
+		chief.makeChief();
+		GuardEntity guard = spawnGuard(helper, 5, 1, 3);
+		guard.setNoAi(true);
+		chief.setNoAi(true);
+		ServerPlayer player = GameTestSupport.addPlayer(helper, GameType.CREATIVE, 7, 1, 7);
+		AABB area = new AABB(helper.absolutePos(new BlockPos(0, 0, 0))).inflate(10);
+
+		try {
+			helper.assertTrue(chief.isChief() && chief.getHealth() == (float) GuardEntity.CHIEF_HEALTH, "the guard should now be a chief with full health");
+			// The sword's damage is applied on the chief's next tick, which this test does not wait for.
+			helper.assertTrue(chief.getAttributeBaseValue(Attributes.ATTACK_DAMAGE) == GuardEntity.CHIEF_ATTACK_DAMAGE, "a chief should hit harder bare-handed than a guard");
+			chief.hurtServer(level, level.damageSources().magic(), 20.0F);
+			helper.assertFalse(chief.hasCalledWarCry(), "the chief should not call its war cry above half health");
+
+			// Right after a hit only damage beyond that hit counts: 45 now takes another 25.
+			chief.hurtServer(level, level.damageSources().magic(), 45.0F);
+			helper.assertTrue(chief.hasCalledWarCry(), "the chief should call its war cry at half health, with " + chief.getHealth() + " left");
+			helper.assertTrue(chief.hasEffect(MobEffects.STRENGTH) && guard.hasEffect(MobEffects.STRENGTH) && guard.hasEffect(MobEffects.SPEED),
+					"the war cry should make the chief and its guards stronger and faster");
+
+			guard.discard();
+			chief.setDropChance(EquipmentSlot.MAINHAND, 0.0F);
+			chief.setDropChance(EquipmentSlot.HEAD, 0.0F);
+			chief.setDropChance(EquipmentSlot.CHEST, 0.0F);
+			chief.hurtServer(level, level.damageSources().playerAttack(player), 1000.0F);
+			helper.assertFalse(chief.isAlive(), "the chief should die of 1000 damage");
+
+			List<Item> dropped = level.getEntitiesOfClass(ItemEntity.class, area).stream().map(item -> item.getItem().getItem()).distinct().toList();
+			helper.assertTrue(dropped.contains(Items.DIAMOND) && dropped.contains(Items.EMERALD), "a chief killed by a player should drop a diamond and emeralds, but dropped " + dropped);
+		} finally {
+			level.getEntitiesOfClass(ItemEntity.class, area).forEach(ItemEntity::discard);
+			GameTestSupport.remove(helper, player);
+			helper.killAllEntities();
+		}
+
+		helper.succeed();
+	}
+
+	@GameTest
+	public void chiefHitsHarderThanAGuard(GameTestHelper helper) {
+		GameTestSupport.buildFloor(helper);
+		GuardEntity guard = spawnGuard(helper, 1, 1, 1);
+		GuardEntity chief = spawnGuard(helper, 5, 1, 5);
+		chief.makeChief();
+
+		// What a held weapon adds is applied on the entity's next tick.
+		helper.runAfterDelay(5, () -> {
+			// A war cry in a test running next to this one may have made them stronger.
+			guard.removeAllEffects();
+			chief.removeAllEffects();
+			double guardDamage = guard.getAttributeValue(Attributes.ATTACK_DAMAGE);
+			double chiefDamage = chief.getAttributeValue(Attributes.ATTACK_DAMAGE);
+			guard.discard();
+			chief.discard();
+			helper.assertTrue(guardDamage == 6.0, "a guard with its iron sword should deal 6 damage, but deals " + guardDamage);
+			helper.assertTrue(chiefDamage == 10.0, "a chief with its diamond sword should deal 10 damage, but deals " + chiefDamage);
+			helper.succeed();
 		});
 	}
 

@@ -68,11 +68,11 @@ public final class WildfrontCommands {
 		HostileCampConfig config = ConfigManager.get().hostileCamps();
 
 		source.sendSuccess(() -> Component.literal("Wildfront bandit camps (" + (config.enabled() ? "on" : "off") + ", activation radius "
-				+ config.activationRadius() + ", " + config.minGuards() + " to " + config.maxGuards() + " guards): " + camps.size() + " visited"), false);
+				+ config.activationRadius() + ", " + config.minGuards() + " to " + config.maxGuards() + " guards, chief chance " + config.chiefChance() + "): " + camps.size() + " visited"), false);
 
 		for (CampState camp : camps) {
 			source.sendSuccess(() -> Component.literal(" - " + camp.center().toShortString() + ": "
-					+ (camp.cleared() ? "cleared" : camp.guardsLeft() + " guard(s) left")), false);
+					+ (camp.cleared() ? "cleared" : camp.guardsLeft() + " guard(s) left") + (camp.chief() ? ", led by a chief" : "")), false);
 		}
 
 		return camps.size();

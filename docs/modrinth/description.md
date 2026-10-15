@@ -21,7 +21,7 @@ Small, long-deserted traveller's camps generate in forests, taigas, savannas, pl
 
 ## Bandit camps
 
-Rarer, and still occupied: a burning fire inside a log palisade, two tents and a chest, held by two or three human guards, archers and swordsmen, depending on the difficulty. The guards appear when you first come near. Defeat them and the camp is cleared for good; they never come back. The chest holds better loot than an abandoned camp's, always including a worn weapon or piece of armour. Bandit camps keep at least 400 blocks from the world origin and away from villages, and stay empty on peaceful.
+Rarer, and still occupied: a burning fire inside a log palisade, two tents and a chest, held by two or three human guards, archers and swordsmen, depending on the difficulty. The guards appear when you first come near. Defeat them and the camp is cleared for good; they never come back. The chest holds better loot than an abandoned camp's, always including a worn weapon or piece of armour. Spot one guard and the whole camp hears the alarm. Some camps are led by a **Camp Chief**, a boss with a health bar, a diamond sword and a war cry, who guards a barred stash of diamonds and emeralds that opens only once the camp is cleared. Bandit camps keep at least 400 blocks from the world origin and away from villages, and stay empty on peaceful.
 
 Camps only generate in **newly generated chunks**. Existing terrain is never changed.
 

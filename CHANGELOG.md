@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.0
+
+### Added
+
+- **Camp chiefs.** About one bandit camp in four is led by a chief: a bigger guard with a skin
+  of its own, a diamond sword, 80 health and heavy armour, who hits for 10 against a guard's 6,
+  shown with a boss health bar. At half health it lets
+  out a war cry that makes it and its guards stronger and faster for 15 seconds. It drops
+  emeralds and a diamond. How often chiefs appear is set by the new `hostileCamps.chiefChance`.
+- **The chief's stash.** In a chief's camp the barrel holds the chief's stash: diamonds,
+  emeralds, gold and an enchanted book or sword. It cannot be opened or broken until the camp is
+  cleared.
+- **Alarm.** When one guard spots a player, every guard of its camp nearby joins the fight and
+  an alarm bell rings.
+- Guards wear and show armour.
+
 ## 0.4.0
 
 ### Added

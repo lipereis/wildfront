@@ -4,7 +4,7 @@ A Minecraft Java Edition mod (Fabric) about dynamic exploration: rare world even
 discoveries and abandoned places that make the world feel unpredictable and alive, without
 replacing vanilla survival.
 
-**Version 0.4.0** for Minecraft 26.3 (Fabric). It adds:
+**Version 0.5.0** for Minecraft 26.3 (Fabric). It adds:
 
 - **Mysterious Discovery**, a dynamic event: a forgotten cache appears near a player who is out
   exploring, the player is told which way to look, and whoever opens it is rewarded.
@@ -22,7 +22,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full list of features and known limitat
 ## Installing
 
 1. Install [Fabric Loader](https://fabricmc.net/use/) 0.19.5 or newer for Minecraft 26.3.
-2. Download `wildfront-0.4.0+mc26.3.jar` from the
+2. Download `wildfront-0.5.0+mc26.3.jar` from the
    [latest release](https://github.com/lipereis/wildfront/releases/latest) (not the `-sources` file).
 3. Put it and [Fabric API](https://modrinth.com/mod/fabric-api) in the `mods` folder of the game
    directory that your Fabric installation uses.
@@ -109,7 +109,7 @@ To confirm the mod loaded, look for these lines in the console or in `run/logs/l
 
 ```
 [Wildfront] Registered 1 event(s): [mysterious_discovery]
-[Wildfront] Initialized (version 0.4.0+mc26.3, environment CLIENT)
+[Wildfront] Initialized (version 0.5.0+mc26.3, environment CLIENT)
 [Wildfront] Client initialized
 ```
 
@@ -148,7 +148,8 @@ start. Apply edits with `/wildfront reload` or by restarting.
     "activationRadius": 48,
     "minGuards": 2,
     "maxGuards": 3,
-    "maxLivingGuards": 40
+    "maxLivingGuards": 40,
+    "chiefChance": 0.25
   }
 }
 ```
@@ -191,7 +192,8 @@ Settings of bandit camps under `hostileCamps`:
 | `activationRadius` | `48` | 16 – 96 | How close, in blocks, a player must come before a camp's guards appear |
 | `minGuards` | `2` | 1 – 8 | Guards of a camp on easy difficulty |
 | `maxGuards` | `3` | 1 – 8 | Guards of a camp on hard difficulty; must not be smaller than `minGuards` |
-| `maxLivingGuards` | `40` | 1 – 200 | Guards alive on the server at once, over all camps. A camp that would exceed it stays empty until there is room |
+| `maxLivingGuards` | `40` | 1 – 200 | Guards alive on the server at once, over all camps, chiefs included. A camp that would exceed it stays empty until there is room |
+| `chiefChance` | `0.25` | 0 – 1 | Chance that a camp is led by a chief when its guards appear; 0 for no chiefs, 1 for a chief in every camp |
 
 A missing, mistyped or out-of-range value is replaced by its default and reported in the log and by
 `/wildfront reload`. A file that is not valid JSON is left untouched and defaults are used for
@@ -290,17 +292,31 @@ the structure it no longer knows has not been tested.
 A camp that somebody still lives in: a burning fire inside a low log palisade, two tents, a
 barrel, a practice target and a chest. It is guarded.
 
-![A bandit camp with its guards on the plains](docs/images/bandit_camp.png)
+![A bandit camp led by a chief, with the chief's health bar at the top](docs/images/bandit_camp.png)
 
 - **Guards.** [Guards](#guard) of the mod's own: archers and, from three guards up, one
   swordsman. They appear the
   first time a player in survival or adventure mode comes within `activationRadius` blocks, so a
   camp nobody visits costs nothing. A camp has `minGuards` on easy, `maxGuards` on hard and a
   random number in between on normal.
+- **Alarm.** The moment one guard spots a player, the whole camp knows: every guard of the camp
+  within 32 blocks goes for that player and an alarm bell rings. Picking guards off one by one
+  only works from beyond their sight.
+- **Chief.** About one camp in four (`chiefChance`) is led by a **Camp Chief**: a bigger guard
+  with a skin of its own (`textures/entity/guard_chief.png`), a diamond sword, 80 health and
+  armour 8 (as much as an iron helmet and chestplate). It deals 10 damage a hit, against a
+  guard's 6. It is shown with a health bar at the top of the screen like a boss. When the chief is down to half its health it lets out a war cry:
+  for 15 seconds it and its guards nearby are stronger and faster. A chief drops emeralds, a
+  diamond when a player killed it, and sometimes its sword; 30 experience.
+- **Stash.** In a chief's camp the barrel is the chief's stash: diamonds, emeralds, gold, iron,
+  experience bottles and an enchanted book or sword, sometimes an enchanted golden apple. It stays
+  barred, neither opening nor breaking, until the camp is cleared. Players in creative mode are
+  not stopped. Explosions are not stopped either.
 - **Peaceful.** A camp stays empty on peaceful. If the difficulty is set to peaceful while a camp
   has guards, the game removes them and the camp counts as unvisited again: it gets a fresh set
   of guards when a player comes near on a higher difficulty. Cleared camps stay cleared.
-- **Clearing.** When the last guard dies, players within 64 blocks are told the camp is cleared.
+- **Clearing.** When the last guard dies, players within 64 blocks are told the camp is cleared,
+  and that the stash is theirs if the camp had a chief.
   A cleared camp never gets guards again. Guards do not despawn. Camps occupied before 0.4.0
   keep the pillagers and vindicators that guarded them then; killing those clears the camp too.
 - **Loot.** The chest holds more than an abandoned camp's: arrows, food, coal, iron, gold and
@@ -321,7 +337,8 @@ barrel, a practice target and a chest. It is guarded.
   finished. A tree that this leaves bare is removed with its trunk: one that took root on a
   corner of the camp where the terrain was kept, or one right beside it with fewer than six
   leaves left. Other trunks and branches are left alone. Abandoned camps keep their canopy.
-- `/wildfront camp list` shows the camps visited so far and how many guards each has left.
+- `/wildfront camp list` shows the camps visited so far, how many guards each has left and
+  which are led by a chief.
 
 Which camps were visited and cleared is stored in the world save. The count of guards left only
 changes when a guard dies. If guards vanish another way, for example through a command of another
@@ -331,7 +348,8 @@ forgets all camps so they are occupied again on the next visit.
 Data files under `data/wildfront/`: `worldgen/structure/bandit_camp.json`,
 `worldgen/structure_set/bandit_camps.json`, `worldgen/template_pool/bandit_camp/start.json`,
 `structure/bandit_camp/small_1.nbt`, `tags/worldgen/biome/has_structure/bandit_camp.json` and
-`loot_table/camp/bandit_small.json`. The structure uses a third setting of
+`loot_table/camp/bandit_small.json`; a chief's stash is `loot_table/camp/chief_stash.json` and a
+chief's own drops are `loot_table/entities/guard_chief.json`. The structure uses a third setting of
 `wildfront:flat_ground_jigsaw`, `min_distance_from_origin` (default 0): no structure closer than
 that many blocks, measured horizontally, to x 0, z 0.
 
@@ -342,20 +360,24 @@ and wears the skin in `assets/wildfront/textures/entity/guard.png`.
 
 | Front | Back |
 |-------|------|
-| ![A guard seen from the front](docs/images/guard_front.png) | ![A guard seen from the back](docs/images/guard_back.png) |
+| ![A camp chief and a guard seen from the front](docs/images/guard_front.png) | ![A camp chief and a guard seen from the back](docs/images/guard_back.png) |
+
+The pictures show a camp chief (left at the front) beside an ordinary guard; the chief wears its own skin.
 
 - 24 health, 2 armour. Sees players 24 blocks away.
 - How it fights follows from what it holds. With an **iron sword** it closes in and deals 6
   damage a hit. With a **bow** it keeps its distance and shoots an arrow every two seconds, as a
   skeleton does. Give it something else and it fights hand to hand with that.
-- Attacks players in survival and adventure mode on sight, calls other guards when hurt, and
-  walks back to its post if it was given one. It does not burn in daylight.
+- Attacks players in survival and adventure mode on sight, alerts the guards of its camp when it
+  spots a player, calls other guards when hurt, and walks back to its post if it was given one.
+  It does not burn in daylight. Armour it wears is drawn and protects it, as on a player.
 - Drops bread or arrows, and sometimes an emerald when a player killed it; 8 experience. The
   loot table is `data/wildfront/loot_table/entities/guard.json`.
 - Does not exist in peaceful worlds.
 - Guards bandit camps. No biome spawns it otherwise. `/summon wildfront:guard` makes a
   swordsman; an archer is
-  `/summon wildfront:guard ~ ~ ~ {equipment:{mainhand:{id:"minecraft:bow"}}}`.
+  `/summon wildfront:guard ~ ~ ~ {equipment:{mainhand:{id:"minecraft:bow"}}}`. A chief cannot be
+  summoned; only camps make them.
 
 The model and all animations are the game's own player model (the classic one with four-pixel
 arms, which is what the skin is painted for); the mod only supplies the texture. A resource pack
@@ -471,8 +493,8 @@ docs/images/           screenshots taken by the client game test
 5. Commit, push and wait for the build workflow to pass. Then tag and push the tag:
 
    ```
-   git tag v0.4.0
-   git push origin v0.4.0
+   git tag v0.5.0
+   git push origin v0.5.0
    ```
 
    The release workflow builds the tagged commit, runs the tests, and publishes a GitHub release

@@ -13,6 +13,7 @@ import dev.wildfront.discovery.ActiveCache;
 import dev.wildfront.discovery.DiscoveryManager;
 import dev.wildfront.entity.GuardEntity;
 import dev.wildfront.event.PlayerCooldowns;
+import dev.wildfront.registry.WildfrontEntities;
 import dev.wildfront.registry.WildfrontEvents;
 import dev.wildfront.registry.WildfrontLootTables;
 import dev.wildfront.registry.WildfrontStructures;
@@ -29,6 +30,7 @@ import net.minecraft.core.HolderSet;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BarrelBlockEntity;
@@ -237,9 +239,19 @@ public class WildfrontDedicatedServerGameTest implements FabricClientGameTest {
 		server.runCommand("summon wildfront:guard " + (x + 1.5) + " " + (y + 1) + " " + (z + 0.5)
 				+ " {NoAI:1b,PersistenceRequired:1b,Rotation:[180f,0f],equipment:{mainhand:{id:\"minecraft:bow\"}}}");
 
+		// And a chief, which camps make; there is no command for one.
+		server.computeOnServer(s -> {
+			GuardEntity chief = WildfrontEntities.GUARD.create(s.overworld(), EntitySpawnReason.COMMAND);
+			chief.snapTo(x + 3.5, y + 1, z + 0.5, 180.0F, 0.0F);
+			chief.makeChief();
+			chief.setNoAi(true);
+			chief.setPersistenceRequired();
+			return s.overworld().addFreshEntity(chief);
+		});
+
 		try {
-			check(server.computeOnServer(s -> s.overworld().getEntities(EntityTypeTest.forClass(GuardEntity.class), guard -> true).size()) == 2,
-					"the server should have two guards");
+			check(server.computeOnServer(s -> s.overworld().getEntities(EntityTypeTest.forClass(GuardEntity.class), guard -> true).size()) == 3,
+					"the server should have two guards and a chief");
 			server.runCommand("tp " + player + " " + (x + 0.5) + " " + (y + 1.2) + " " + (z - 3.0) + " 0 5");
 			connection.waitForChunksRender();
 
@@ -250,17 +262,21 @@ public class WildfrontDedicatedServerGameTest implements FabricClientGameTest {
 
 				int swords = 0;
 				int bows = 0;
+				int chiefs = 0;
 
 				for (Entity entity : client.level.entitiesForRendering()) {
 					if (entity instanceof GuardEntity guard) {
-						swords += guard.getMainHandItem().is(Items.IRON_SWORD) ? 1 : 0;
+						swords += !guard.isChief() && guard.getMainHandItem().is(Items.IRON_SWORD) ? 1 : 0;
 						bows += guard.getMainHandItem().is(Items.BOW) ? 1 : 0;
+						chiefs += guard.isChief() && guard.getMainHandItem().is(Items.DIAMOND_SWORD) ? 1 : 0;
 					}
 				}
 
-				return swords == 1 && bows == 1;
+				return swords == 1 && bows == 1 && chiefs == 1;
 			}, CLIENT_SYNC_TIMEOUT_TICKS);
-			System.out.println("[WildfrontDedicatedServerGameTest] the client sees a guard with a sword and a guard with a bow");
+			System.out.println("[WildfrontDedicatedServerGameTest] the client sees a guard with a sword, a guard with a bow and a chief");
+			check(server.computeOnServer(s -> s.overworld().getEntities(EntityTypeTest.forClass(GuardEntity.class), GuardEntity::isChief).stream()
+					.anyMatch(chief -> chief.showsBossBarTo(s.getPlayerList().getPlayerByName(player)))), "the connected player should see the chief's boss bar");
 
 			context.waitTicks(220);
 			context.takeScreenshot("5_server_guards");

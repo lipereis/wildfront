@@ -15,7 +15,7 @@ import dev.wildfront.config.ConfigManager;
 import dev.wildfront.config.EventConfig;
 import dev.wildfront.config.HostileCampConfig;
 import dev.wildfront.dungeon.DungeonState;
-import dev.wildfront.dungeon.ForgottenTemple;
+import dev.wildfront.dungeon.DungeonStates;
 import dev.wildfront.config.WildfrontConfig;
 import dev.wildfront.event.EventScheduler;
 import dev.wildfront.event.EventSettings;
@@ -84,12 +84,12 @@ public final class WildfrontCommands {
 
 	private static int listDungeons(CommandContext<CommandSourceStack> context) {
 		CommandSourceStack source = context.getSource();
-		List<DungeonState> dungeons = ForgottenTemple.states(source.getServer().overworld());
+		List<DungeonState> dungeons = DungeonStates.all(source.getServer().overworld());
 		source.sendSuccess(() -> Component.literal("Wildfront dungeons touched so far: " + dungeons.size()), false);
 
 		for (DungeonState dungeon : dungeons) {
 			source.sendSuccess(() -> Component.literal(" - " + dungeon.origin().toShortString() + ": "
-					+ (dungeon.solved() ? "solved" : dungeon.progress() + " of 4 glyphs awake") + (dungeon.secretOpen() ? ", secret open" : "")), false);
+					+ (dungeon.solved() ? "solved" : dungeon.progress() > 0 ? dungeon.progress() + " glyph(s) awake" : "not solved") + (dungeon.secretOpen() ? ", secret open" : "")), false);
 		}
 
 		return dungeons.size();

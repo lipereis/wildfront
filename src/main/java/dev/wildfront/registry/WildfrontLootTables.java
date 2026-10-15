@@ -17,6 +17,8 @@ public final class WildfrontLootTables {
 	public static final ResourceKey<LootTable> CHIEF_STASH = ResourceKey.create(Registries.LOOT_TABLE, Wildfront.id("camp/chief_stash"));
 
 	public static final ResourceKey<LootTable> TEMPLE_SANCTUM = ResourceKey.create(Registries.LOOT_TABLE, Wildfront.id("dungeon/temple_sanctum"));
+	public static final ResourceKey<LootTable> VAULT_MAIN = ResourceKey.create(Registries.LOOT_TABLE, Wildfront.id("dungeon/vault_main"));
+	public static final ResourceKey<LootTable> VAULT_COMPARTMENT = ResourceKey.create(Registries.LOOT_TABLE, Wildfront.id("dungeon/vault_compartment"));
 	public static final ResourceKey<LootTable> TEMPLE_RELIQUARY = ResourceKey.create(Registries.LOOT_TABLE, Wildfront.id("dungeon/temple_reliquary"));
 
 	/** Dropped by a camp chief in addition to what every guard drops. */

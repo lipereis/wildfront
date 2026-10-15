@@ -4,7 +4,7 @@ A Minecraft Java Edition mod (Fabric) about dynamic exploration: rare world even
 discoveries and abandoned places that make the world feel unpredictable and alive, without
 replacing vanilla survival.
 
-**Version 0.6.0** for Minecraft 26.3 (Fabric). It adds:
+**Version 0.7.0** for Minecraft 26.3 (Fabric). It adds:
 
 - **Mysterious Discovery**, a dynamic event: a forgotten cache appears near a player who is out
   exploring, the player is told which way to look, and whoever opens it is rewarded.
@@ -13,6 +13,8 @@ replacing vanilla survival.
   once they are defeated the camp stays cleared.
 - **The Forgotten Temple**, a buried temple with a glyph puzzle, a sealed sanctum and a hidden
   reliquary.
+- **The Mechanist's Vault**, a workshop shed over a buried control room whose levers and gauges
+  open a vault and a secret compartment.
 - A configurable, server-side event system the events are built on.
 
 | Abandoned camp | Forgotten cache |
@@ -24,7 +26,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full list of features and known limitat
 ## Installing
 
 1. Install [Fabric Loader](https://fabricmc.net/use/) 0.19.5 or newer for Minecraft 26.3.
-2. Download `wildfront-0.6.0+mc26.3.jar` from the
+2. Download `wildfront-0.7.0+mc26.3.jar` from the
    [latest release](https://github.com/lipereis/wildfront/releases/latest) (not the `-sources` file).
 3. Put it and [Fabric API](https://modrinth.com/mod/fabric-api) in the `mods` folder of the game
    directory that your Fabric installation uses.
@@ -111,7 +113,7 @@ To confirm the mod loaded, look for these lines in the console or in `run/logs/l
 
 ```
 [Wildfront] Registered 1 event(s): [mysterious_discovery]
-[Wildfront] Initialized (version 0.6.0+mc26.3, environment CLIENT)
+[Wildfront] Initialized (version 0.7.0+mc26.3, environment CLIENT)
 [Wildfront] Client initialized
 ```
 
@@ -404,6 +406,54 @@ is listed in `ForgottenTemple.SOLUTIONS`; a game test per variant reads the mura
 template and checks that they give that order, then solves it, checks that the sanctum and
 reliquary cannot be reached before their seals open and can be after.
 
+## The Mechanist's Vault
+
+A small cobblestone shed with a ladder down through its floor, on dry, level ground. Fourteen
+blocks below lies the control room of an old workshop.
+
+| Closed | Open |
+|--------|------|
+| ![The control room: gauges in copper bulbs under their marks, five levers on copper blocks, the vault's obsidian door](docs/images/vault_closed.png) | ![The same room with the levers pulled: three gauges burn and the vault door is gone](docs/images/vault_open.png) |
+
+The pictures were taken with night vision.
+
+- **The puzzle.** Five levers stand on a desk, each on a different kind of copper. Six gauges
+  (copper bulbs) sit in the north wall, each on a different polished stone, with a mark above it:
+  glowstone for a gauge that must burn, black concrete for one that must be dark. A sign says
+  *Set each gauge to the mark above it.*
+- **Experiment.** Each lever switches a set of gauges: pulling it lights those that were dark and
+  darkens those that were lit. Which gauges a lever switches is not written anywhere; pulling
+  them one at a time shows it, and every pull can be undone, so there is no wrong move and
+  nothing to reset. Each variant has exactly one way to match the marks.
+- **The vault.** When every gauge matches its mark, the obsidian door in the east wall breaks
+  open. Two chests behind it hold redstone, iron, copper, gold, quartz and experience bottles,
+  and one of one to three diamonds, an enchanted book, an enchanted iron pickaxe or a golden
+  apple.
+- **The secret.** Halfway down the ladder, a niche holds a lever on chiseled copper with a note:
+  *TEST MODE: set the gauges as the floor shows.* The floor in front of the gauges is a row of
+  sea lanterns and smooth basalt. With the test switch on and the gauges showing that row, the
+  crying obsidian in the west wall opens on a compartment with emeralds and one of two or three
+  diamonds, a name tag, a spyglass, a strongly enchanted book or an enchanted golden apple.
+- **No way round.** The vault and compartment are enclosed in reinforced deepslate. Until their
+  doors open, players in survival or adventure mode cannot break the doors, the reinforced
+  deepslate, the levers, the gauges, the copper and stone they stand on, or the marks and floor
+  pattern. Lighting a gauge some other way does nothing: the mod works out the gauges from the
+  levers. A lever that is broken anyway can be replaced on its copper block.
+- **Variants.** Three, each with its own wiring and its own arrangement of levers and gauges.
+  The mod knows each lever by its copper and each gauge by its stone, so a vault turned any way
+  works the same.
+- **Where.** Plains, sunflower plains, meadows, savannas, deserts and badlands, at least 300
+  blocks from the world origin and away from villages. Candidate spots are about 512 blocks
+  apart (spacing 32 chunks, separation 12). In the one world measured (seed `wildfront`), 14 of
+  289 candidate spots, or 5%, got a vault. Only in chunks generated after the mod was added.
+- `/locate structure wildfront:mechanists_vault` finds one; `/wildfront dungeon list` shows the
+  vaults and temples players have interacted with.
+
+Each variant's wiring, target and maintenance pattern are in `VaultCircuit.VARIANTS`. A unit test
+checks for each variant that both patterns have exactly one solution and that no two lever
+settings look alike; a game test per variant reads the marks and floor of the built template,
+checks them against the wiring, and opens both doors with the levers alone.
+
 ## Guard
 
 `wildfront:guard` is a human guard, the size and shape of a player. It is the mod's own entity
@@ -466,7 +516,7 @@ All require operator permission (game master level; cheats enabled in singleplay
 | `/wildfront event trigger <event> [player]` | Triggers an event now, ignoring cooldowns, chance and conditions, and starts the cooldowns |
 | `/wildfront event reset [player]` | Clears the player's event cooldowns |
 | `/wildfront camp list` | Shows the bandit camp settings and every camp visited so far, with its guards left or `cleared` |
-| `/wildfront dungeon list` | Shows the temples players have interacted with: how many glyphs are awake, whether solved, whether the secret is open |
+| `/wildfront dungeon list` | Shows the temples and vaults players have interacted with: whether solved, how many glyphs are awake, whether the secret is open |
 | `/wildfront camp reset` | Removes all loaded guards and forgets all camps, cleared ones included; camps are occupied again when a player comes near |
 | `/wildfront reload` | Reloads the config file and reports problems |
 
@@ -520,7 +570,7 @@ src/main/java/dev/wildfront/
   event/type/          concrete events
   discovery/           forgotten cache: site selection, placement, tracking, expiry
   camp/                bandit camps: who guards them, spawning, tracking, clearing
-  dungeon/             the Forgotten Temple's puzzle, seals and saved progress
+  dungeon/             the Forgotten Temple and the Mechanist's Vault: puzzles, seals and saved progress
   entity/              the guard
   registry/            central registration of events, data attachments, loot table keys and structure types
   worldgen/            structure type that only generates on dry, level ground
@@ -546,8 +596,8 @@ docs/images/           screenshots taken by the client game test
 5. Commit, push and wait for the build workflow to pass. Then tag and push the tag:
 
    ```
-   git tag v0.6.0
-   git push origin v0.6.0
+   git tag v0.7.0
+   git push origin v0.7.0
    ```
 
    The release workflow builds the tagged commit, runs the tests, and publishes a GitHub release

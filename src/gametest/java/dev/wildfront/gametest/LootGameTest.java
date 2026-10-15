@@ -148,6 +148,23 @@ public class LootGameTest {
 	}
 
 	@GameTest
+	public void vaultAndCompartmentLoot(GameTestHelper helper) {
+		List<Content> vault = draw(helper, WildfrontLootTables.VAULT_MAIN);
+		assertAtLeastWhenPresent(helper, vault, Items.REDSTONE, 6);
+		assertAtLeastWhenPresent(helper, vault, Items.IRON_INGOT, 4);
+		helper.assertTrue(vault.stream().allMatch(chest -> chest.total(Items.DIAMOND) <= 3), "a vault chest should hold at most 3 diamonds");
+		helper.assertTrue(chestsWith(vault, Items.ENCHANTED_BOOK) > 0 && chestsWith(vault, Items.BOOK) == 0, "vault books should be enchanted");
+		helper.assertTrue(vault.stream().flatMap(chest -> chest.stacks().stream()).filter(stack -> stack.is(Items.IRON_PICKAXE)).allMatch(stack -> stack.isEnchanted()),
+				"a vault's iron pickaxe should be enchanted");
+		helper.assertTrue(vault.stream().allMatch(chest -> chest.stacks().size() >= 4), "every vault chest should hold at least four stacks");
+
+		List<Content> compartment = draw(helper, WildfrontLootTables.VAULT_COMPARTMENT);
+		helper.assertTrue(compartment.stream().allMatch(chest -> chest.total(Items.EMERALD) >= 4 && chest.total(Items.EMERALD) <= 8), "every compartment should hold 4 to 8 emeralds");
+		helper.assertTrue(chestsWith(compartment, Items.ENCHANTED_BOOK) > 0 && chestsWith(compartment, Items.BOOK) == 0, "compartment books should be enchanted");
+		helper.succeed();
+	}
+
+	@GameTest
 	public void chiefStashIsRich(GameTestHelper helper) {
 		List<Content> stashes = draw(helper, WildfrontLootTables.CHIEF_STASH);
 

@@ -14,7 +14,10 @@ import dev.wildfront.camp.CampState;
 import dev.wildfront.config.ConfigManager;
 import dev.wildfront.discovery.ActiveCache;
 import dev.wildfront.discovery.DiscoveryManager;
+import dev.wildfront.dungeon.DungeonStates;
 import dev.wildfront.dungeon.ForgottenTemple;
+import dev.wildfront.dungeon.MechanistsVault;
+import dev.wildfront.dungeon.VaultCircuit;
 import dev.wildfront.entity.GuardEntity;
 import dev.wildfront.registry.WildfrontEntities;
 import dev.wildfront.registry.WildfrontLootTables;
@@ -46,10 +49,13 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ButtonBlock;
 import net.minecraft.world.level.block.CampfireBlock;
 import net.minecraft.world.level.block.CandleBlock;
+import net.minecraft.world.level.block.FaceAttachedHorizontalDirectionalBlock;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
+import net.minecraft.world.level.block.LeverBlock;
 import net.minecraft.world.level.block.RotatedPillarBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.AttachFace;
 import net.minecraft.world.level.entity.EntityTypeTest;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
@@ -113,6 +119,7 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 			occupiedBanditCamp(context, world, player);
 			banditCampsUnderTrees(context, world, player);
 			naturalForgottenTemple(context, world, player);
+			naturalMechanistsVault(context, world, player);
 			layoutGallery(context, world, player, visited);
 			forcedEvent(context, world, player);
 			automaticEvent(context, world, player);
@@ -570,6 +577,181 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 		System.out.println("[WildfrontClientGameTest] pedestal candles after the picture: " + candlesAfterPicture);
 		check(!candlesAfterSolving.contains("unlit"), "every pedestal candle should burn once the temple is solved: " + candlesAfterSolving);
 		server.runCommand("effect clear " + player + " minecraft:night_vision");
+	}
+
+	/**
+	 * Surveys where vaults generate, goes to the nearest one and opens both its doors the way a
+	 * player does: pulling levers, through the same block events, as the marks and the floor say.
+	 */
+	private static void naturalMechanistsVault(ClientGameTestContext context, TestSingleplayerContext world, String player) {
+		TestServerContext server = world.getServer();
+		CampSurvey.Result survey = server.computeOnServer(s -> CampSurvey.run(s.overworld(), s.getPlayerList().getPlayers().get(0).blockPosition(),
+				WildfrontStructures.MECHANISTS_VAULT, WildfrontStructures.MECHANISTS_VAULT_VARIANTS, 3, SURVEY_MAX_CANDIDATES));
+		System.out.println("[WildfrontClientGameTest] vault survey: " + survey.camps().size() + " vaults at " + survey.candidates()
+				+ " candidate spots (" + Math.round(100.0 * survey.camps().size() / survey.candidates()) + "%), by variant: " + survey.countByLayout());
+		check(!survey.camps().isEmpty(), "world generation should place vaults, but none of " + survey.candidates() + " candidate spots has one");
+
+		BlockPos located = survey.camps().get(0).start();
+		server.runCommand("gamemode spectator " + player);
+		server.runCommand("effect give " + player + " minecraft:night_vision 300 0 true");
+		server.runCommand("tp " + player + " " + located.getX() + " " + (located.getY() + 4) + " " + located.getZ());
+		waitForTerrain(context, world, located);
+
+		MechanistsVault.Vault vault = server.computeOnServer(s -> MechanistsVault.find(s.overworld(), located).orElse(null));
+		check(vault != null, "the vault at " + located.toShortString() + " should be found from its own corner");
+		int doors = server.computeOnServer(s -> countIn(s.overworld(), vault.box(), MechanistsVault.DOOR));
+		int secretDoors = server.computeOnServer(s -> countIn(s.overworld(), vault.box(), MechanistsVault.SECRET_DOOR));
+		// Water or lava below the shed's floor is inside the buried part; above it, it is the surface around the shed.
+		int[] fluids = server.computeOnServer(s -> {
+			int[] wet = new int[2];
+
+			for (BlockPos pos : BlockPos.betweenClosed(vault.box().minX(), vault.box().minY(), vault.box().minZ(), vault.box().maxX(), vault.box().maxY(), vault.box().maxZ())) {
+				if (!s.overworld().getFluidState(pos).isEmpty()) {
+					wet[pos.getY() < vault.box().minY() + 14 ? 0 : 1]++;
+				}
+			}
+
+			return wet;
+		});
+		System.out.println("[WildfrontClientGameTest] natural vault " + vault.variant() + " at " + vault.box().getCenter().toShortString()
+				+ ": door " + doors + " block(s), compartment door " + secretDoors + ", water or lava in " + fluids[0] + " block(s) below ground and "
+				+ fluids[1] + " on the surface of its box");
+		// Where a player can be: everything reachable from the desk without passing a full block.
+		List<BlockPos> flooded = server.computeOnServer(s -> {
+			ServerLevel level = s.overworld();
+			BlockPos start = vaultLevers(level, vault).get(0);
+			java.util.Set<BlockPos> seen = new java.util.HashSet<>(List.of(start));
+			java.util.ArrayDeque<BlockPos> queue = new java.util.ArrayDeque<>(List.of(start));
+			List<BlockPos> wet = new ArrayList<>();
+
+			while (!queue.isEmpty()) {
+				BlockPos pos = queue.poll();
+
+				if (!level.getFluidState(pos).isEmpty()) {
+					wet.add(pos);
+				}
+
+				for (Direction side : Direction.values()) {
+					BlockPos next = pos.relative(side);
+
+					if (vault.box().isInside(next) && next.getY() < vault.box().minY() + 14 && seen.add(next)
+							&& !level.getBlockState(next).isCollisionShapeFullBlock(level, next)) {
+						queue.add(next);
+					}
+				}
+			}
+
+			return wet;
+		});
+		check(flooded.isEmpty(), "the vault's rooms should be dry, but water or lava stands at " + flooded);
+		check(doors == 4 && secretDoors == 4, "the vault's doors should have generated whole, but there are " + doors + " and " + secretDoors + " blocks");
+
+		Map<Integer, BlockPos> levers = server.computeOnServer(s -> vaultLevers(s.overworld(), vault));
+		BlockPos testSwitch = levers.remove(-1);
+		check(levers.size() == VaultCircuit.LEVERS && testSwitch != null, "the vault should have five levers on copper and a test switch, but has " + levers.keySet());
+
+		BlockPos door = server.computeOnServer(s -> middleOfVault(s.overworld(), vault, MechanistsVault.DOOR));
+		BlockPos desk = average(List.copyOf(levers.values()));
+		double dx = desk.getX() - door.getX();
+		double dz = desk.getZ() - door.getZ();
+		double length = Math.max(1.0, Math.sqrt(dx * dx + dz * dz));
+		double cameraX = door.getX() + 0.5 + dx / length * 7.0;
+		double cameraZ = door.getZ() + 0.5 + dz / length * 7.0;
+		float yaw = (float) Math.toDegrees(Math.atan2(-(door.getX() - cameraX + 0.5), door.getZ() - cameraZ + 0.5)) - 20.0F;
+		String camera = cameraX + " " + (door.getY() + 1.2) + " " + cameraZ + " " + yaw + " 12";
+
+		server.runCommand("tp " + player + " " + camera);
+		world.getConnection().waitForChunksRender();
+		takeWorldScreenshot(context, "1_vault_closed");
+
+		VaultCircuit circuit = vault.circuit();
+		boolean[] solution = circuit.solutions(circuit.target()).get(0);
+		server.runCommand("gamemode survival " + player);
+		boolean doorHolds = server.computeOnServer(s -> !PlayerBlockBreakEvents.BEFORE.invoker().beforeBlockBreak(s.overworld(),
+				s.getPlayerList().getPlayerByName(player), door, s.overworld().getBlockState(door), null));
+		check(doorHolds, "a survival player must not be able to break the vault door");
+
+		for (int lever = 0; lever < VaultCircuit.LEVERS; lever++) {
+			if (solution[lever]) {
+				pullLever(server, player, levers.get(lever));
+			}
+		}
+
+		context.waitTicks(5);
+		check(server.computeOnServer(s -> countIn(s.overworld(), vault.box(), MechanistsVault.DOOR)) == 0, "pulling the levers that match the marks should open the vault");
+		check(server.computeOnServer(s -> DungeonStates.of(s.overworld(), vault.origin()).solved()), "the vault should be recorded as open");
+		System.out.println("[WildfrontClientGameTest] natural vault opened by pulling levers " + java.util.Arrays.toString(solution));
+
+		server.runCommand("gamemode spectator " + player);
+		server.runCommand("tp " + player + " " + camera);
+		takeWorldScreenshot(context, "1_vault_open");
+
+		// The secret: the test switch, then the levers for the floor's pattern.
+		boolean[] maintenance = circuit.solutions(circuit.maintenance()).get(0);
+		server.runCommand("gamemode survival " + player);
+		pullLever(server, player, testSwitch);
+
+		for (int lever = 0; lever < VaultCircuit.LEVERS; lever++) {
+			if (solution[lever] != maintenance[lever]) {
+				pullLever(server, player, levers.get(lever));
+			}
+		}
+
+		context.waitTicks(5);
+		server.runCommand("gamemode spectator " + player);
+		check(server.computeOnServer(s -> countIn(s.overworld(), vault.box(), MechanistsVault.SECRET_DOOR)) == 0, "the test switch and the floor's pattern should open the compartment");
+		System.out.println("[WildfrontClientGameTest] natural vault's compartment opened");
+		server.runCommand("effect clear " + player + " minecraft:night_vision");
+	}
+
+	/**
+	 * Pulls a lever the way a player's click does: the block event first, then the lever flips.
+	 */
+	static void pullLever(TestServerContext server, String player, BlockPos lever) {
+		server.computeOnServer(s -> {
+			ServerPlayer serverPlayer = s.getPlayerList().getPlayerByName(player);
+			UseBlockCallback.EVENT.invoker().interact(serverPlayer, s.overworld(), InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(lever), Direction.UP, lever, false));
+			BlockState state = s.overworld().getBlockState(lever);
+			((LeverBlock) state.getBlock()).pull(state, s.overworld(), lever, serverPlayer);
+			return true;
+		});
+	}
+
+	/**
+	 * @return each lever on copper by its number; the test switch under -1
+	 */
+	static Map<Integer, BlockPos> vaultLevers(ServerLevel level, MechanistsVault.Vault vault) {
+		Map<Integer, BlockPos> levers = new HashMap<>();
+
+		for (BlockPos pos : BlockPos.betweenClosed(vault.box().minX(), vault.box().minY(), vault.box().minZ(), vault.box().maxX(), vault.box().maxY(), vault.box().maxZ())) {
+			BlockState state = level.getBlockState(pos);
+
+			if (state.getBlock() instanceof LeverBlock) {
+				AttachFace face = state.getValue(FaceAttachedHorizontalDirectionalBlock.FACE);
+				BlockPos support = face == AttachFace.FLOOR ? pos.below() : face == AttachFace.CEILING ? pos.above()
+						: pos.relative(state.getValue(HorizontalDirectionalBlock.FACING).getOpposite());
+				Block mount = level.getBlockState(support).getBlock();
+				int lever = mount == MechanistsVault.TEST_MOUNT ? -1 : MechanistsVault.LEVER_MOUNTS.indexOf(mount);
+
+				if (lever >= -1 && (lever >= 0 || mount == MechanistsVault.TEST_MOUNT)) {
+					levers.put(lever, pos.immutable());
+				}
+			}
+		}
+
+		return levers;
+	}
+
+	static BlockPos middleOfVault(ServerLevel level, MechanistsVault.Vault vault, Block block) {
+		List<BlockPos> found = new ArrayList<>();
+
+		for (BlockPos pos : BlockPos.betweenClosed(vault.box().minX(), vault.box().minY(), vault.box().minZ(), vault.box().maxX(), vault.box().maxY(), vault.box().maxZ())) {
+			if (level.getBlockState(pos).is(block)) {
+				found.add(pos.immutable());
+			}
+		}
+
+		return found.isEmpty() ? vault.box().getCenter() : average(found);
 	}
 
 	static Map<Block, BlockPos> pedestalButtons(ServerLevel level, ForgottenTemple.Temple temple) {

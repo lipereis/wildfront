@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.0
+
+### Added
+
+- **The Mechanist's Vault**, the second puzzle dungeon. A workshop shed on the surface, with a
+  ladder down to a buried control room. Five levers each switch a set of six gauges; set the
+  gauges to the marks above them and the vault opens. A test switch hidden in the shaft, with
+  the gauges set to the pattern in the floor, opens a secret compartment. Every lever can be
+  pulled back, so there is no wrong move. Three variants, each with its own wiring. Newly
+  generated chunks only.
+
 ## 0.6.0
 
 ### Added

@@ -12,7 +12,10 @@ import com.mojang.datafixers.util.Pair;
 import dev.wildfront.config.ConfigManager;
 import dev.wildfront.discovery.ActiveCache;
 import dev.wildfront.discovery.DiscoveryManager;
+import dev.wildfront.dungeon.DungeonStates;
 import dev.wildfront.dungeon.ForgottenTemple;
+import dev.wildfront.dungeon.MechanistsVault;
+import dev.wildfront.dungeon.VaultCircuit;
 import dev.wildfront.entity.GuardEntity;
 import dev.wildfront.event.PlayerCooldowns;
 import dev.wildfront.registry.WildfrontEntities;
@@ -39,8 +42,10 @@ import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CopperBulbBlock;
 import net.minecraft.world.level.block.entity.BarrelBlockEntity;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.entity.EntityTypeTest;
 import net.minecraft.world.level.levelgen.structure.Structure;
 import net.minecraft.world.phys.BlockHitResult;
@@ -87,6 +92,7 @@ public class WildfrontDedicatedServerGameTest implements FabricClientGameTest {
 			naturallyGeneratedCamp(context, server, connection, player);
 			guardsOverTheNetwork(context, server, connection, player);
 			templeOverTheNetwork(context, server, connection, player);
+			vaultOverTheNetwork(context, server, connection, player);
 			System.out.println("[WildfrontDedicatedServerGameTest] PASSED");
 		}
 	}
@@ -333,6 +339,62 @@ public class WildfrontDedicatedServerGameTest implements FabricClientGameTest {
 		context.waitFor(client -> client.level != null && !client.level.getBlockState(seal).is(ForgottenTemple.SEAL), CLIENT_SYNC_TIMEOUT_TICKS);
 		System.out.println("[WildfrontDedicatedServerGameTest] temple " + temple.variant() + " at " + temple.box().getCenter().toShortString()
 				+ " solved on the server; the client sees its seal gone");
+	}
+
+	/**
+	 * Opens a naturally generated vault on the server by pulling its levers, and waits until the
+	 * client sees its door gone and its gauges lit as on the server.
+	 */
+	private static void vaultOverTheNetwork(ClientGameTestContext context, TestDedicatedServerContext server,
+			TestDedicatedServerConnection connection, String player) {
+		CampSurvey.Result survey = server.computeOnServer(s -> CampSurvey.run(s.overworld(), s.getPlayerList().getPlayerByName(player).blockPosition(),
+				WildfrontStructures.MECHANISTS_VAULT, WildfrontStructures.MECHANISTS_VAULT_VARIANTS, 1, 400));
+		check(!survey.camps().isEmpty(), "world generation on the server should place a vault");
+		BlockPos located = survey.camps().get(0).start();
+
+		server.runCommand("gamemode spectator " + player);
+		server.runCommand("tp " + player + " " + located.getX() + " " + (located.getY() + 4) + " " + located.getZ());
+		connection.waitForChunksRender();
+		server.waitFor(s -> s.overworld().isLoaded(located), CLIENT_SYNC_TIMEOUT_TICKS);
+
+		MechanistsVault.Vault vault = server.computeOnServer(s -> MechanistsVault.find(s.overworld(), located).orElse(null));
+		check(vault != null, "the server should find the vault at " + located.toShortString());
+		Map<Integer, BlockPos> levers = server.computeOnServer(s -> WildfrontClientGameTest.vaultLevers(s.overworld(), vault));
+		BlockPos door = server.computeOnServer(s -> WildfrontClientGameTest.middleOfVault(s.overworld(), vault, MechanistsVault.DOOR));
+		context.waitFor(client -> client.level != null && client.level.getBlockState(door).is(MechanistsVault.DOOR), CLIENT_SYNC_TIMEOUT_TICKS);
+
+		server.runCommand("gamemode survival " + player);
+		server.runCommand("effect give " + player + " minecraft:resistance 60 4 true");
+		boolean[] solution = vault.circuit().solutions(vault.circuit().target()).get(0);
+
+		for (int lever = 0; lever < VaultCircuit.LEVERS; lever++) {
+			if (solution[lever]) {
+				WildfrontClientGameTest.pullLever(server, player, levers.get(lever));
+			}
+		}
+
+		server.waitFor(s -> DungeonStates.of(s.overworld(), vault.origin()).solved(), 40);
+		server.runCommand("gamemode spectator " + player);
+		server.runCommand("effect clear " + player + " minecraft:resistance");
+		context.waitFor(client -> client.level != null && !client.level.getBlockState(door).is(MechanistsVault.DOOR), CLIENT_SYNC_TIMEOUT_TICKS);
+
+		List<BlockPos> lit = server.computeOnServer(s -> {
+			List<BlockPos> gauges = new java.util.ArrayList<>();
+
+			for (BlockPos pos : BlockPos.betweenClosed(vault.box().minX(), vault.box().minY(), vault.box().minZ(), vault.box().maxX(), vault.box().maxY(), vault.box().maxZ())) {
+				BlockState state = s.overworld().getBlockState(pos);
+
+				if (state.is(MechanistsVault.GAUGE) && state.getValue(CopperBulbBlock.LIT)) {
+					gauges.add(pos.immutable());
+				}
+			}
+
+			return gauges;
+		});
+		check(lit.size() == vault.circuit().target().size(), "the server should light as many gauges as the target has marks");
+		context.waitFor(client -> client.level != null && lit.stream().allMatch(pos -> client.level.getBlockState(pos).getValue(CopperBulbBlock.LIT)), CLIENT_SYNC_TIMEOUT_TICKS);
+		System.out.println("[WildfrontDedicatedServerGameTest] vault " + vault.variant() + " at " + vault.box().getCenter().toShortString()
+				+ " opened on the server; the client sees the door gone and " + lit.size() + " gauges lit");
 	}
 
 	private static void check(boolean condition, String message) {

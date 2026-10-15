@@ -62,6 +62,18 @@ public final class WildfrontStructures {
 			Wildfront.id("forgotten_temple/variant_2"),
 			Wildfront.id("forgotten_temple/variant_3"));
 
+	public static final ResourceKey<Structure> MECHANISTS_VAULT = ResourceKey.create(Registries.STRUCTURE, Wildfront.id("mechanists_vault"));
+	public static final ResourceKey<StructureSet> MECHANISTS_VAULTS = ResourceKey.create(Registries.STRUCTURE_SET, Wildfront.id("mechanists_vaults"));
+	public static final ResourceKey<StructureTemplatePool> MECHANISTS_VAULT_START_POOL = ResourceKey.create(Registries.TEMPLATE_POOL, Wildfront.id("mechanists_vault/start"));
+
+	/**
+	 * Every variant of the Mechanist's Vault; each has its own wiring.
+	 */
+	public static final List<Identifier> MECHANISTS_VAULT_VARIANTS = List.of(
+			Wildfront.id("mechanists_vault/variant_1"),
+			Wildfront.id("mechanists_vault/variant_2"),
+			Wildfront.id("mechanists_vault/variant_3"));
+
 	public static final TagKey<Biome> HAS_ABANDONED_CAMP = TagKey.create(Registries.BIOME, Wildfront.id("has_structure/abandoned_camp"));
 
 	private WildfrontStructures() {

@@ -57,14 +57,14 @@ Upload in this order; make the first one the featured image.
 
 | Field | Value |
 |---|---|
-| File | `wildfront-0.6.0+mc26.3.jar` from https://github.com/lipereis/wildfront/releases/latest (not the `-sources` jar) |
-| Version number | `0.6.0+mc26.3` |
-| Version title | `Wildfront 0.6.0` |
+| File | `wildfront-0.7.0+mc26.3.jar` from https://github.com/lipereis/wildfront/releases/latest (not the `-sources` jar) |
+| Version number | `0.7.0+mc26.3` |
+| Version title | `Wildfront 0.7.0` |
 | Release channel | Release (or Beta, if you would rather signal that it is new) |
 | Loaders | Fabric |
 | Game versions | 26.3 |
 | Dependencies | Fabric API — required |
-| Changelog | paste the `0.6.0`, `0.5.0`, `0.4.0`, `0.3.2`, `0.3.1`, `0.3.0`, `0.2.1`, `0.2.0`, `0.1.1` and `0.1.0` sections of `CHANGELOG.md`, since this is the first version on Modrinth |
+| Changelog | paste the `0.7.0`, `0.6.0`, `0.5.0`, `0.4.0`, `0.3.2`, `0.3.1`, `0.3.0`, `0.2.1`, `0.2.0`, `0.1.1` and `0.1.0` sections of `CHANGELOG.md`, since this is the first version on Modrinth |
 
 Modrinth usually fills in loader, game version and version number from the jar; check them
 against this table.

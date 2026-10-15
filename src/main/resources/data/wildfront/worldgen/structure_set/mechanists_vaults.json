@@ -1,0 +1,18 @@
+{
+	"structures": [
+		{
+			"structure": "wildfront:mechanists_vault",
+			"weight": 1
+		}
+	],
+	"placement": {
+		"type": "minecraft:random_spread",
+		"spacing": 32,
+		"separation": 12,
+		"salt": 662190851,
+		"exclusion_zone": {
+			"other_set": "minecraft:villages",
+			"chunk_count": 6
+		}
+	}
+}

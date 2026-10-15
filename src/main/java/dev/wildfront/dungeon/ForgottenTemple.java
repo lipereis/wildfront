@@ -1,12 +1,10 @@
 package dev.wildfront.dungeon;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import dev.wildfront.Wildfront;
-import dev.wildfront.registry.WildfrontAttachments;
 import dev.wildfront.registry.WildfrontStructures;
 
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
@@ -244,30 +242,22 @@ public final class ForgottenTemple {
 	}
 
 	public static List<DungeonState> states(ServerLevel level) {
-		return level.getAttachedOrElse(WildfrontAttachments.DUNGEONS, List.of());
+		return DungeonStates.all(level);
 	}
 
 	public static DungeonState stateOf(ServerLevel level, Temple temple) {
-		BlockPos origin = temple.origin();
-		return states(level).stream().filter(state -> state.origin().equals(origin)).findFirst().orElseGet(() -> DungeonState.untouched(origin));
+		return DungeonStates.of(level, temple.origin());
 	}
 
 	private static void save(ServerLevel level, DungeonState state) {
-		List<DungeonState> states = new ArrayList<>(states(level));
-		states.removeIf(other -> other.origin().equals(state.origin()));
-		states.add(state);
-		level.setAttached(WildfrontAttachments.DUNGEONS, List.copyOf(states));
+		DungeonStates.save(level, state);
 	}
 
 	/**
 	 * Forgets a temple's state. Its seals stay as they are. Used by tests.
 	 */
 	public static void forget(ServerLevel level, Temple temple) {
-		List<DungeonState> states = new ArrayList<>(states(level));
-
-		if (states.removeIf(state -> state.origin().equals(temple.origin()))) {
-			level.setAttached(WildfrontAttachments.DUNGEONS, List.copyOf(states));
-		}
+		DungeonStates.forget(level, temple.origin());
 	}
 
 	private static void light(ServerLevel level, BlockPos pos, boolean lit) {

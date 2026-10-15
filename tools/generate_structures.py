@@ -478,7 +478,133 @@ def forgotten_temple_3():
     forgotten_temple("variant_3", "BDAC", (("C", 2), ("D", 3), ("A", 1), ("B", 4)))
 
 
-LAYOUTS = (lean_to, tent, cart, ruin, bandit_small, forgotten_temple_1, forgotten_temple_2, forgotten_temple_3)
+
+# The Mechanist's Vault: a workshop shed on the surface over a buried control room. 15 x 18 x 15;
+# the shed's floor, at y = 14, is the ground layer.
+#
+#   shed           x 5..7, y 15..16, z 11..13   door to the south; a ladder down in its floor
+#   shaft          x 6, y 1..14, z 12           ladder; a niche halfway down holds the test switch
+#   control room   x 3..9, y 1..4, z 7..11      five levers on copper blocks, six gauges on the north wall
+#   vault          x 11..13, y 1..3, z 8..10    main reward, behind an obsidian door in the east wall
+#   compartment    x 1, y 1..2, z 8..9          secret, behind crying obsidian in the west wall
+#
+# Each lever flips a set of gauges (copper bulbs). The mark above each gauge (glowstone or black
+# concrete) is the target; the row of floor tiles in front of the gauges (sea lantern or smooth
+# basalt) is the maintenance pattern that, with the test switch on, opens the compartment. The
+# mod knows each lever by the copper block under it and each gauge by the polished stone under
+# it, never by position. CIRCUITS must match VaultCircuit.VARIANTS in the mod; the game tests
+# check every variant against it.
+VAULT_SIZE = (15, 18, 15)
+LEVER_MOUNTS = ("minecraft:waxed_copper_block", "minecraft:waxed_exposed_copper", "minecraft:waxed_weathered_copper",
+                "minecraft:waxed_oxidized_copper", "minecraft:waxed_cut_copper")
+GAUGE_MARKERS = ("minecraft:polished_andesite", "minecraft:polished_diorite", "minecraft:polished_granite",
+                 "minecraft:polished_tuff", "minecraft:polished_deepslate", "minecraft:polished_blackstone")
+TEST_MOUNT = "minecraft:waxed_chiseled_copper"
+VAULT_CHEST = {"id": "minecraft:chest", "LootTable": "wildfront:dungeon/vault_main"}
+COMPARTMENT_CHEST = {"id": "minecraft:chest", "LootTable": "wildfront:dungeon/vault_compartment"}
+CIRCUITS = {
+    "variant_1": {"target": {1, 3, 5}, "maintenance": {0, 2, 3}},
+    "variant_2": {"target": {1, 2, 5}, "maintenance": {1, 3, 4}},
+    "variant_3": {"target": {0, 1, 2, 4}, "maintenance": {0, 1, 2, 5}},
+}
+
+
+def _box(t, x0, y0, z0, x1, y1, z1, name):
+    for x in range(x0, x1 + 1):
+        for y in range(y0, y1 + 1):
+            for z in range(z0, z1 + 1):
+                t.set(x, y, z, name)
+
+
+def _sign(t, x, y, z, facing, lines):
+    t.set(x, y, z, "minecraft:oak_wall_sign", facing=facing, nbt={
+        "id": "minecraft:sign",
+        "front_text": {"messages": list(lines)},
+        "back_text": {"messages": ["", "", "", ""]},
+    })
+
+
+def mechanists_vault(variant, lever_order, gauge_order):
+    """One variant: `lever_order` gives the lever on each desk spot from west to east, `gauge_order`
+    the gauge on each spot of the gauge wall from west to east."""
+    circuit = CIRCUITS[variant]
+    t = Template(VAULT_SIZE)
+
+    # Control room: deepslate tiles all round, smooth stone floor.
+    _box(t, 2, 0, 6, 10, 5, 12, "minecraft:deepslate_tiles")
+    _box(t, 3, 0, 7, 9, 0, 11, "minecraft:smooth_stone")
+    _box(t, 3, 1, 7, 9, 4, 11, "minecraft:air")
+
+    # The vault: reinforced deepslate, its obsidian door facing the control room.
+    _vault_shell(t, 11, 1, 8, 13, 3, 10)
+    _box(t, 10, 1, 8, 10, 2, 9, "minecraft:obsidian")
+    t.set(13, 1, 8, "minecraft:chest", nbt=VAULT_CHEST, facing="west")
+    t.set(13, 1, 10, "minecraft:chest", nbt=VAULT_CHEST, facing="west")
+    t.set(12, 3, 9, "minecraft:lantern", hanging="true")
+
+    # The compartment: reinforced deepslate, its crying obsidian door in the control room's west wall.
+    _vault_shell(t, 1, 1, 8, 1, 2, 9)
+    _box(t, 2, 1, 8, 2, 2, 9, "minecraft:crying_obsidian")
+    t.set(1, 1, 8, "minecraft:chest", nbt=COMPARTMENT_CHEST, facing="east")
+
+    # Gauge wall: marker, gauge, target mark; the maintenance pattern in the floor in front.
+    for x, gauge in zip(range(3, 9), gauge_order):
+        t.set(x, 2, 6, GAUGE_MARKERS[gauge])
+        t.set(x, 3, 6, "minecraft:waxed_copper_bulb", lit="false", powered="false")
+        t.set(x, 4, 6, "minecraft:glowstone" if gauge in circuit["target"] else "minecraft:black_concrete")
+        t.set(x, 0, 7, "minecraft:sea_lantern" if gauge in circuit["maintenance"] else "minecraft:smooth_basalt")
+
+    # Desk: a lever on each copper block.
+    for x, lever in zip(range(4, 9), lever_order):
+        t.set(x, 1, 9, LEVER_MOUNTS[lever])
+        t.set(x, 2, 9, "minecraft:lever", face="floor", facing="north", powered="false")
+    _sign(t, 4, 3, 11, "north", ["Set each gauge", "to the mark", "above it.", ""])
+    t.set(6, 4, 9, "minecraft:lantern", hanging="true")
+    t.set(9, 4, 11, "minecraft:cobweb")
+
+    # Shaft from the shed down to the control room, with a ladder on its south side.
+    for y in range(1, 15):
+        t.set(6, y, 12, "minecraft:ladder", facing="north")
+    for y in range(5, 15):
+        for x, z in ((5, 12), (7, 12), (6, 11), (6, 13)):
+            t.set(x, y, z, "minecraft:deepslate_tiles")
+    for y in range(1, 5):
+        t.set(6, y, 13, "minecraft:deepslate_tiles")
+    # The test switch, in a niche halfway down, with its note.
+    t.set(5, 8, 12, "minecraft:lever", face="wall", facing="east", powered="false")
+    t.set(4, 8, 12, TEST_MOUNT)
+    t.set(5, 9, 12, "minecraft:air")
+    t.set(4, 9, 12, "minecraft:deepslate_tiles")
+    _sign(t, 5, 9, 12, "east", ["TEST MODE", "Set the gauges", "as the floor", "shows."])
+
+    # The shed on the surface.
+    _box(t, 4, 14, 10, 8, 14, 14, "minecraft:cobblestone")
+    _box(t, 4, 15, 10, 8, 16, 14, "minecraft:cobblestone")
+    _box(t, 5, 15, 11, 7, 16, 13, "minecraft:air")
+    _box(t, 4, 17, 10, 8, 17, 14, "minecraft:spruce_planks")
+    t.set(6, 14, 12, "minecraft:ladder", facing="north")
+    t.set(6, 15, 14, "minecraft:air")
+    t.set(6, 16, 14, "minecraft:air")
+    t.set(5, 15, 11, "minecraft:anvil", facing="east")
+    t.set(7, 16, 13, "minecraft:lantern", hanging="true")
+
+    t.write(OUTPUT / "mechanists_vault" / f"{variant}.nbt")
+
+
+def mechanists_vault_1():
+    mechanists_vault("variant_1", (0, 1, 2, 3, 4), (0, 1, 2, 3, 4, 5))
+
+
+def mechanists_vault_2():
+    mechanists_vault("variant_2", (3, 0, 4, 1, 2), (2, 5, 0, 3, 1, 4))
+
+
+def mechanists_vault_3():
+    mechanists_vault("variant_3", (1, 4, 2, 0, 3), (4, 0, 5, 1, 3, 2))
+
+
+LAYOUTS = (lean_to, tent, cart, ruin, bandit_small, forgotten_temple_1, forgotten_temple_2, forgotten_temple_3,
+           mechanists_vault_1, mechanists_vault_2, mechanists_vault_3)
 
 if __name__ == "__main__":
     for layout in LAYOUTS:

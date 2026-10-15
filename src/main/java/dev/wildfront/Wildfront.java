@@ -6,6 +6,7 @@ import dev.wildfront.command.WildfrontCommands;
 import dev.wildfront.config.ConfigManager;
 import dev.wildfront.discovery.DiscoveryManager;
 import dev.wildfront.dungeon.ForgottenTemple;
+import dev.wildfront.dungeon.MechanistsVault;
 import dev.wildfront.event.EventManager;
 import dev.wildfront.registry.WildfrontAttachments;
 import dev.wildfront.registry.WildfrontEntities;
@@ -43,6 +44,7 @@ public class Wildfront implements ModInitializer {
 		CampManager.register();
 		CanopyClearing.register();
 		ForgottenTemple.register();
+		MechanistsVault.register();
 		WildfrontCommands.register();
 
 		LOGGER.info("[Wildfront] Initialized (version {}, environment {})",

@@ -29,6 +29,10 @@ Camps only generate in **newly generated chunks**. Existing terrain is never cha
 
 Deep underground, reached only by caving or mining, lies a buried temple. Murals of glyphs and candles hint at the order in which to wake four glyphs; wake them right and the sealed sanctum opens. A fifth glyph, hidden behind vines, leads to a secret reliquary with rarer treasure. Mistakes cost nothing but starting over, and the sealed chambers cannot be dug or blown into.
 
+## The Mechanist's Vault
+
+A little shed on the plains hides a ladder down to an old workshop's control room. Five levers, six gauges, and marks that show what the gauges should read: find out what each lever does, set the gauges right, and the vault opens. A test switch somewhere on the way down, and a pattern in the floor, open a hidden compartment too.
+
 ## Configurable
 
 `config/wildfront.json` is created on first start:

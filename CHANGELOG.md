@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.0
+
+### Added
+
+- **The Forgotten Temple**, the first puzzle dungeon. A temple buried deep underground, found by
+  caving or mining. Murals of glyphs and candles tell in which order to wake four glyphs; doing
+  so opens a sanctum with two chests. A fifth glyph hidden behind vines opens a secret
+  reliquary with rarer loot. Mistakes cost nothing but starting over. The chambers are sealed
+  in reinforced deepslate and cannot be broken into while sealed. Three variants, each with its
+  own order. Newly generated chunks only.
+- Command `/wildfront dungeon list`.
+
 ## 0.5.0
 
 ### Added

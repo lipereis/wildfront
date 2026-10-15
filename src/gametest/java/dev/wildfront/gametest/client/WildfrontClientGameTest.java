@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -13,6 +14,7 @@ import dev.wildfront.camp.CampState;
 import dev.wildfront.config.ConfigManager;
 import dev.wildfront.discovery.ActiveCache;
 import dev.wildfront.discovery.DiscoveryManager;
+import dev.wildfront.dungeon.ForgottenTemple;
 import dev.wildfront.entity.GuardEntity;
 import dev.wildfront.registry.WildfrontEntities;
 import dev.wildfront.registry.WildfrontLootTables;
@@ -23,6 +25,8 @@ import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestServerContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
+import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.loader.api.FabricLoader;
 
 import net.minecraft.client.gui.screens.worldselection.WorldCreationUiState;
@@ -30,19 +34,27 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.BlockTags;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.ButtonBlock;
 import net.minecraft.world.level.block.CampfireBlock;
+import net.minecraft.world.level.block.CandleBlock;
+import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.RotatedPillarBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.entity.EntityTypeTest;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Plays through the mod in a real client with a normally generated world: surveys where camps
@@ -100,6 +112,7 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 			campsAmongTrees(world, player);
 			occupiedBanditCamp(context, world, player);
 			banditCampsUnderTrees(context, world, player);
+			naturalForgottenTemple(context, world, player);
 			layoutGallery(context, world, player, visited);
 			forcedEvent(context, world, player);
 			automaticEvent(context, world, player);
@@ -474,6 +487,161 @@ public class WildfrontClientGameTest implements FabricClientGameTest {
 		}
 
 		return leaves;
+	}
+
+	/**
+	 * Surveys where temples generate, then goes to the nearest one, checks what generated there and
+	 * solves it the way a player does: through the same block events, in the order its murals give.
+	 */
+	private static void naturalForgottenTemple(ClientGameTestContext context, TestSingleplayerContext world, String player) {
+		TestServerContext server = world.getServer();
+		CampSurvey.Result survey = server.computeOnServer(s -> CampSurvey.run(s.overworld(), s.getPlayerList().getPlayers().get(0).blockPosition(),
+				WildfrontStructures.FORGOTTEN_TEMPLE, WildfrontStructures.FORGOTTEN_TEMPLE_VARIANTS, 3, SURVEY_MAX_CANDIDATES));
+		System.out.println("[WildfrontClientGameTest] temple survey: " + survey.camps().size() + " temples at " + survey.candidates()
+				+ " candidate spots (" + Math.round(100.0 * survey.camps().size() / survey.candidates()) + "%), by variant: " + survey.countByLayout());
+		check(!survey.camps().isEmpty(), "world generation should place temples, but none of " + survey.candidates() + " candidate spots has one");
+
+		BlockPos located = survey.camps().get(0).start();
+		server.runCommand("gamemode spectator " + player);
+		server.runCommand("effect give " + player + " minecraft:night_vision 300 0 true");
+		server.runCommand("tp " + player + " " + located.getX() + " " + (located.getY() + 4) + " " + located.getZ());
+		waitForTerrain(context, world, located);
+
+		ForgottenTemple.Temple temple = server.computeOnServer(s -> ForgottenTemple.find(s.overworld(), located).orElse(null));
+		check(temple != null, "the temple at " + located.toShortString() + " should be found from its own corner");
+		check(temple.solution().size() == 4, "the temple's variant " + temple.variant() + " should have a known order");
+		int seals = server.computeOnServer(s -> countIn(s.overworld(), temple.box(), ForgottenTemple.SEAL));
+		int secretSeals = server.computeOnServer(s -> countIn(s.overworld(), temple.box(), ForgottenTemple.SECRET_SEAL));
+		int fluids = server.computeOnServer(s -> {
+			int wet = 0;
+
+			for (BlockPos pos : BlockPos.betweenClosed(temple.box().minX(), temple.box().minY(), temple.box().minZ(), temple.box().maxX(), temple.box().maxY(), temple.box().maxZ())) {
+				wet += s.overworld().getFluidState(pos).isEmpty() ? 0 : 1;
+			}
+
+			return wet;
+		});
+		System.out.println("[WildfrontClientGameTest] natural temple " + temple.variant() + " at " + temple.box().getCenter().toShortString()
+				+ ": seal " + seals + " block(s), secret seal " + secretSeals + ", water or lava in " + fluids + " block(s) of its box");
+		check(seals == 9 && secretSeals == 4, "the temple's seals should have generated whole, but there are " + seals + " and " + secretSeals + " blocks");
+
+		// Where the pedestals' buttons are, and where to stand to look at the seal.
+		Map<Block, BlockPos> buttons = server.computeOnServer(s -> pedestalButtons(s.overworld(), temple));
+		check(buttons.keySet().equals(Set.copyOf(ForgottenTemple.GLYPHS)), "the temple should have a button on each pedestal glyph, but has " + buttons.keySet());
+		BlockPos seal = server.computeOnServer(s -> middleOf(s.overworld(), temple, ForgottenTemple.SEAL));
+		BlockPos pedestals = average(List.copyOf(buttons.values()));
+		double dx = pedestals.getX() - seal.getX();
+		double dz = pedestals.getZ() - seal.getZ();
+		double length = Math.max(1.0, Math.sqrt(dx * dx + dz * dz));
+		double cameraX = seal.getX() + 0.5 + dx / length * 7.0;
+		double cameraZ = seal.getZ() + 0.5 + dz / length * 7.0;
+		float yaw = (float) Math.toDegrees(Math.atan2(-(seal.getX() - cameraX + 0.5), seal.getZ() - cameraZ + 0.5));
+		String camera = cameraX + " " + (seal.getY() + 0.5) + " " + cameraZ + " " + yaw + " 10";
+
+		server.runCommand("tp " + player + " " + camera);
+		world.getConnection().waitForChunksRender();
+		takeWorldScreenshot(context, "1_temple_sealed");
+
+		// As a survival player: the seal holds, then the glyphs are woken in the murals' order.
+		server.runCommand("gamemode survival " + player);
+		boolean sealHolds = server.computeOnServer(s -> {
+			ServerPlayer serverPlayer = s.getPlayerList().getPlayerByName(player);
+			BlockPos sealBlock = middleOf(s.overworld(), temple, ForgottenTemple.SEAL);
+			return !PlayerBlockBreakEvents.BEFORE.invoker().beforeBlockBreak(s.overworld(), serverPlayer, sealBlock, s.overworld().getBlockState(sealBlock), null);
+		});
+		check(sealHolds, "a survival player must not be able to break the temple's seal");
+
+		for (Block glyph : temple.solution()) {
+			BlockPos button = buttons.get(glyph);
+			server.computeOnServer(s -> UseBlockCallback.EVENT.invoker().interact(s.getPlayerList().getPlayerByName(player), s.overworld(),
+					InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(button), Direction.UP, button, false)));
+		}
+
+		server.runCommand("gamemode spectator " + player);
+		check(server.computeOnServer(s -> countIn(s.overworld(), temple.box(), ForgottenTemple.SEAL)) == 0, "pressing the glyphs in the murals' order should open the seal");
+		check(server.computeOnServer(s -> ForgottenTemple.stateOf(s.overworld(), temple).solved()), "the temple should be recorded as solved");
+		System.out.println("[WildfrontClientGameTest] natural temple solved through the block events in the order " + temple.solution());
+		String candlesAfterSolving = server.computeOnServer(s -> pedestalCandles(s.overworld(), buttons));
+		System.out.println("[WildfrontClientGameTest] pedestal candles after solving: " + candlesAfterSolving);
+
+		server.runCommand("tp " + player + " " + camera);
+		takeWorldScreenshot(context, "1_temple_open");
+		String candlesAfterPicture = server.computeOnServer(s -> pedestalCandles(s.overworld(), buttons));
+		System.out.println("[WildfrontClientGameTest] pedestal candles after the picture: " + candlesAfterPicture);
+		check(!candlesAfterSolving.contains("unlit"), "every pedestal candle should burn once the temple is solved: " + candlesAfterSolving);
+		server.runCommand("effect clear " + player + " minecraft:night_vision");
+	}
+
+	static Map<Block, BlockPos> pedestalButtons(ServerLevel level, ForgottenTemple.Temple temple) {
+		Map<Block, BlockPos> buttons = new HashMap<>();
+
+		for (BlockPos pos : BlockPos.betweenClosed(temple.box().minX(), temple.box().minY(), temple.box().minZ(), temple.box().maxX(), temple.box().maxY(), temple.box().maxZ())) {
+			BlockState state = level.getBlockState(pos);
+
+			if (state.getBlock() instanceof ButtonBlock) {
+				Direction facing = state.getValue(HorizontalDirectionalBlock.FACING);
+				Block glyph = level.getBlockState(pos.relative(facing.getOpposite())).getBlock();
+
+				if (ForgottenTemple.GLYPHS.contains(glyph)) {
+					buttons.put(glyph, pos.immutable());
+				}
+			}
+		}
+
+		return buttons;
+	}
+
+	private static String pedestalCandles(ServerLevel level, Map<Block, BlockPos> buttons) {
+		List<String> states = new ArrayList<>();
+
+		for (Map.Entry<Block, BlockPos> entry : buttons.entrySet()) {
+			BlockState button = level.getBlockState(entry.getValue());
+			BlockPos glyph = entry.getValue().relative(button.getValue(HorizontalDirectionalBlock.FACING).getOpposite());
+			BlockState candle = level.getBlockState(glyph.above());
+			states.add(entry.getKey().getDescriptionId() + " at " + glyph.toShortString() + ": "
+					+ (candle.getBlock() instanceof CandleBlock ? (candle.getValue(CandleBlock.LIT) ? "lit" : "unlit") : candle.toString()));
+		}
+
+		return states.toString();
+	}
+
+	static BlockPos middleOf(ServerLevel level, ForgottenTemple.Temple temple, Block block) {
+		List<BlockPos> found = new ArrayList<>();
+
+		for (BlockPos pos : BlockPos.betweenClosed(temple.box().minX(), temple.box().minY(), temple.box().minZ(), temple.box().maxX(), temple.box().maxY(), temple.box().maxZ())) {
+			if (level.getBlockState(pos).is(block)) {
+				found.add(pos.immutable());
+			}
+		}
+
+		return found.isEmpty() ? temple.box().getCenter() : average(found);
+	}
+
+	private static BlockPos average(List<BlockPos> positions) {
+		long x = 0;
+		long y = 0;
+		long z = 0;
+
+		for (BlockPos pos : positions) {
+			x += pos.getX();
+			y += pos.getY();
+			z += pos.getZ();
+		}
+
+		int n = positions.size();
+		return new BlockPos(Math.round((float) x / n), Math.round((float) y / n), Math.round((float) z / n));
+	}
+
+	private static int countIn(ServerLevel level, BoundingBox box, Block block) {
+		int count = 0;
+
+		for (BlockPos pos : BlockPos.betweenClosed(box.minX(), box.minY(), box.minZ(), box.maxX(), box.maxY(), box.maxZ())) {
+			if (level.getBlockState(pos).is(block)) {
+				count++;
+			}
+		}
+
+		return count;
 	}
 
 	/**

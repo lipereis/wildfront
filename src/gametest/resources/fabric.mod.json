@@ -11,7 +11,8 @@
 			"dev.wildfront.gametest.EventSystemGameTest",
 			"dev.wildfront.gametest.LootGameTest",
 			"dev.wildfront.gametest.BanditCampGameTest",
-			"dev.wildfront.gametest.GuardGameTest"
+			"dev.wildfront.gametest.GuardGameTest",
+			"dev.wildfront.gametest.ForgottenTempleGameTest"
 		],
 		"fabric-client-gametest": [
 			"dev.wildfront.gametest.client.WildfrontClientGameTest",

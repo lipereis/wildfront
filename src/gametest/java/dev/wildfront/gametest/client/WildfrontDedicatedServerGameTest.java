@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 import com.mojang.datafixers.util.Pair;
@@ -11,6 +12,7 @@ import com.mojang.datafixers.util.Pair;
 import dev.wildfront.config.ConfigManager;
 import dev.wildfront.discovery.ActiveCache;
 import dev.wildfront.discovery.DiscoveryManager;
+import dev.wildfront.dungeon.ForgottenTemple;
 import dev.wildfront.entity.GuardEntity;
 import dev.wildfront.event.PlayerCooldowns;
 import dev.wildfront.registry.WildfrontEntities;
@@ -22,21 +24,27 @@ import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerConnection;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestDedicatedServerContext;
+import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.loader.api.FabricLoader;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BarrelBlockEntity;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.entity.EntityTypeTest;
 import net.minecraft.world.level.levelgen.structure.Structure;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Plays through the mod on a real dedicated server with a real client connected to it: command
@@ -78,6 +86,7 @@ public class WildfrontDedicatedServerGameTest implements FabricClientGameTest {
 			automaticEventAndExpiry(context, server, player);
 			naturallyGeneratedCamp(context, server, connection, player);
 			guardsOverTheNetwork(context, server, connection, player);
+			templeOverTheNetwork(context, server, connection, player);
 			System.out.println("[WildfrontDedicatedServerGameTest] PASSED");
 		}
 	}
@@ -285,6 +294,45 @@ public class WildfrontDedicatedServerGameTest implements FabricClientGameTest {
 			server.runCommand("kill @e[type=minecraft:item]");
 			server.runCommand("fill " + (x - 3) + " " + y + " " + (z - 5) + " " + (x + 3) + " " + y + " " + (z + 5) + " minecraft:air");
 		}
+	}
+
+	/**
+	 * Solves a naturally generated temple on the server through the block events a player's
+	 * clicks cause, and waits until the client, over the connection, sees its seal gone.
+	 */
+	private static void templeOverTheNetwork(ClientGameTestContext context, TestDedicatedServerContext server,
+			TestDedicatedServerConnection connection, String player) {
+		CampSurvey.Result survey = server.computeOnServer(s -> CampSurvey.run(s.overworld(), s.getPlayerList().getPlayerByName(player).blockPosition(),
+				WildfrontStructures.FORGOTTEN_TEMPLE, WildfrontStructures.FORGOTTEN_TEMPLE_VARIANTS, 1, 400));
+		check(!survey.camps().isEmpty(), "world generation on the server should place a temple");
+		BlockPos located = survey.camps().get(0).start();
+
+		server.runCommand("gamemode spectator " + player);
+		server.runCommand("tp " + player + " " + located.getX() + " " + (located.getY() + 4) + " " + located.getZ());
+		connection.waitForChunksRender();
+		server.waitFor(s -> s.overworld().isLoaded(located), CLIENT_SYNC_TIMEOUT_TICKS);
+
+		ForgottenTemple.Temple temple = server.computeOnServer(s -> ForgottenTemple.find(s.overworld(), located).orElse(null));
+		check(temple != null, "the server should find the temple at " + located.toShortString());
+		Map<Block, BlockPos> buttons = server.computeOnServer(s -> WildfrontClientGameTest.pedestalButtons(s.overworld(), temple));
+		BlockPos seal = server.computeOnServer(s -> WildfrontClientGameTest.middleOf(s.overworld(), temple, ForgottenTemple.SEAL));
+		context.waitFor(client -> client.level != null && client.level.getBlockState(seal).is(ForgottenTemple.SEAL), CLIENT_SYNC_TIMEOUT_TICKS);
+
+		server.runCommand("gamemode survival " + player);
+		server.runCommand("effect give " + player + " minecraft:resistance 60 4 true");
+
+		for (Block glyph : temple.solution()) {
+			BlockPos button = buttons.get(glyph);
+			server.computeOnServer(s -> UseBlockCallback.EVENT.invoker().interact(s.getPlayerList().getPlayerByName(player), s.overworld(),
+					InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(button), Direction.UP, button, false)));
+		}
+
+		server.runCommand("gamemode spectator " + player);
+		server.runCommand("effect clear " + player + " minecraft:resistance");
+		check(server.computeOnServer(s -> ForgottenTemple.stateOf(s.overworld(), temple).solved()), "the temple should be solved on the server");
+		context.waitFor(client -> client.level != null && !client.level.getBlockState(seal).is(ForgottenTemple.SEAL), CLIENT_SYNC_TIMEOUT_TICKS);
+		System.out.println("[WildfrontDedicatedServerGameTest] temple " + temple.variant() + " at " + temple.box().getCenter().toShortString()
+				+ " solved on the server; the client sees its seal gone");
 	}
 
 	private static void check(boolean condition, String message) {

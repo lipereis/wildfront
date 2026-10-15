@@ -25,6 +25,10 @@ Rarer, and still occupied: a burning fire inside a log palisade, two tents and a
 
 Camps only generate in **newly generated chunks**. Existing terrain is never changed.
 
+## The Forgotten Temple
+
+Deep underground, reached only by caving or mining, lies a buried temple. Murals of glyphs and candles hint at the order in which to wake four glyphs; wake them right and the sealed sanctum opens. A fifth glyph, hidden behind vines, leads to a secret reliquary with rarer treasure. Mistakes cost nothing but starting over, and the sealed chambers cannot be dug or blown into.
+
 ## Configurable
 
 `config/wildfront.json` is created on first start:

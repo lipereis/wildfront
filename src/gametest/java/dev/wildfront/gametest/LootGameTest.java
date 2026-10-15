@@ -130,6 +130,24 @@ public class LootGameTest {
 	}
 
 	@GameTest
+	public void templeSanctumAndReliquaryLoot(GameTestHelper helper) {
+		List<Content> sanctum = draw(helper, WildfrontLootTables.TEMPLE_SANCTUM);
+		helper.assertTrue(sanctum.stream().allMatch(chest -> chest.total(Items.DIAMOND) <= 2), "a sanctum chest should hold at most 2 diamonds");
+		assertAtLeastWhenPresent(helper, sanctum, Items.IRON_INGOT, 2);
+		assertAtLeastWhenPresent(helper, sanctum, Items.LAPIS_LAZULI, 4);
+		helper.assertTrue(chestsWith(sanctum, Items.ENCHANTED_BOOK) > 0, "an enchanted book should turn up in " + DRAWS + " sanctum chests");
+		helper.assertTrue(chestsWith(sanctum, Items.BOOK) == 0, "plain books turned up in " + chestsWith(sanctum, Items.BOOK) + " sanctum chests");
+		helper.assertTrue(sanctum.stream().allMatch(chest -> chest.stacks().size() >= 4), "every sanctum chest should hold at least four stacks");
+
+		List<Content> reliquary = draw(helper, WildfrontLootTables.TEMPLE_RELIQUARY);
+		helper.assertTrue(reliquary.stream().allMatch(chest -> chest.total(Items.EMERALD) >= 4 && chest.total(Items.EMERALD) <= 8),
+				"every reliquary should hold 4 to 8 emeralds");
+		helper.assertTrue(chestsWith(reliquary, Items.WILD_ARMOR_TRIM_SMITHING_TEMPLATE) > 0, "the wild armour trim should turn up in " + DRAWS + " reliquaries");
+		helper.assertTrue(chestsWith(reliquary, Items.ENCHANTED_BOOK) > 0 && chestsWith(reliquary, Items.BOOK) == 0, "reliquary books should be enchanted");
+		helper.succeed();
+	}
+
+	@GameTest
 	public void chiefStashIsRich(GameTestHelper helper) {
 		List<Content> stashes = draw(helper, WildfrontLootTables.CHIEF_STASH);
 

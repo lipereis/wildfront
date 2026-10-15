@@ -8,6 +8,7 @@ import com.mojang.serialization.Codec;
 import dev.wildfront.Wildfront;
 import dev.wildfront.camp.CampState;
 import dev.wildfront.discovery.ActiveCache;
+import dev.wildfront.dungeon.DungeonState;
 
 import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
 import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
@@ -31,6 +32,12 @@ public final class WildfrontAttachments {
 	 */
 	public static final AttachmentType<List<CampState>> CAMPS = AttachmentRegistry.createPersistent(
 			Wildfront.id("camps"), CampState.CODEC.listOf());
+
+	/**
+	 * Per level: dungeons somebody has interacted with, and how far their puzzles are solved.
+	 */
+	public static final AttachmentType<List<DungeonState>> DUNGEONS = AttachmentRegistry.createPersistent(
+			Wildfront.id("dungeons"), DungeonState.CODEC.listOf());
 
 	private WildfrontAttachments() {
 	}

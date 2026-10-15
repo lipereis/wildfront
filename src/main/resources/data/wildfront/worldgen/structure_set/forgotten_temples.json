@@ -1,0 +1,18 @@
+{
+	"structures": [
+		{
+			"structure": "wildfront:forgotten_temple",
+			"weight": 1
+		}
+	],
+	"placement": {
+		"type": "minecraft:random_spread",
+		"spacing": 32,
+		"separation": 12,
+		"salt": 418053297,
+		"exclusion_zone": {
+			"other_set": "minecraft:trial_chambers",
+			"chunk_count": 4
+		}
+	}
+}

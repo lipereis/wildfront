@@ -317,7 +317,168 @@ def bandit_small():
     camp.write(OUTPUT / "bandit_camp" / "small_1.nbt")
 
 
-LAYOUTS = (lean_to, tent, cart, ruin, bandit_small)
+# The Forgotten Temple: an underground temple with a glyph puzzle. 21 x 8 x 21.
+#
+# Rooms, inside measures (x, y, z from the template's north-west corner, y up):
+#   corridor      x 9..11, y 1..3, z 18..20   open to the south edge: the way in from the rock
+#   entrance hall x 5..15, y 1..5, z 12..16   four glyph murals with 1 to 4 lit candles: the clue
+#   glyph hall    x 4..16, y 1..6, z 5..10    four pedestals, a glyph and a button on each
+#   sanctum       x 7..13, y 1..4, z 1..3     main reward, behind a crying obsidian seal
+#   reliquary     x 1..2,  y 1..2, z 7..8     optional secret, behind an obsidian seal under vines
+#
+# The mod reads the puzzle from the blocks, so the layout must keep to these rules, which the game
+# tests check for every variant:
+# - Each of the four pedestal glyphs appears exactly once on a pedestal (with a button on its
+#   south side) and once in a mural, where the number of candles gives its place in the order.
+# - The fifth glyph appears once in a mural without candles and once beside the secret seal, with
+#   a button on it. It is on no pedestal.
+# - The glyph blocks, crying obsidian and obsidian are used for nothing else.
+# - The sanctum and the reliquary are enclosed in reinforced deepslate apart from their seals.
+TEMPLE_SIZE = (21, 8, 21)
+GLYPHS = {
+    "A": "minecraft:chiseled_stone_bricks",
+    "B": "minecraft:chiseled_tuff_bricks",
+    "C": "minecraft:chiseled_deepslate",
+    "D": "minecraft:chiseled_red_sandstone",
+}
+SECRET_GLYPH = "minecraft:chiseled_polished_blackstone"
+SANCTUM_CHEST = {"id": "minecraft:chest", "LootTable": "wildfront:dungeon/temple_sanctum"}
+RELIQUARY_CHEST = {"id": "minecraft:chest", "LootTable": "wildfront:dungeon/temple_reliquary"}
+PEDESTAL_XS = (6, 8, 12, 14)
+# Mural spots in the entrance hall: (glyph in the wall, plinth and candle in front of it).
+MURALS = (((4, 2, 13), (5, 13)), ((4, 2, 15), (5, 15)), ((16, 2, 13), (15, 13)), ((16, 2, 15), (15, 15)))
+
+
+def _brick(x, y, z):
+    """Old stone bricks: mostly plain, some mossy or cracked, always the same at a position."""
+    roll = (x * 73856093 ^ y * 19349663 ^ z * 83492791) % 100
+    if roll < 22:
+        return "minecraft:mossy_stone_bricks"
+    if roll < 36:
+        return "minecraft:cracked_stone_bricks"
+    return "minecraft:stone_bricks"
+
+
+def _room(t, x0, y0, z0, x1, y1, z1):
+    """Walls, floor and ceiling around an inside space, which is filled with air. Walls that would
+    lie outside the template are left out: a room touching its edge is open to the rock there."""
+    for x in range(x0 - 1, x1 + 2):
+        for y in range(y0 - 1, y1 + 2):
+            for z in range(z0 - 1, z1 + 2):
+                if not all(0 <= c < size for c, size in zip((x, y, z), t.size)):
+                    continue
+                inside = x0 <= x <= x1 and y0 <= y <= y1 and z0 <= z <= z1
+                if inside:
+                    t.set(x, y, z, "minecraft:air")
+                elif (x, y, z) not in t.blocks or y == y0 - 1:
+                    t.set(x, y, z, "minecraft:stone_bricks" if y == y0 - 1 else _brick(x, y, z))
+
+
+def _air(t, x0, y0, z0, x1, y1, z1):
+    for x in range(x0, x1 + 1):
+        for y in range(y0, y1 + 1):
+            for z in range(z0, z1 + 1):
+                t.set(x, y, z, "minecraft:air")
+
+
+def _vault_shell(t, x0, y0, z0, x1, y1, z1):
+    """Encloses an inside space in reinforced deepslate, which no explosion or piston moves."""
+    for x in range(x0 - 1, x1 + 2):
+        for y in range(y0 - 1, y1 + 2):
+            for z in range(z0 - 1, z1 + 2):
+                if x0 <= x <= x1 and y0 <= y <= y1 and z0 <= z <= z1:
+                    t.set(x, y, z, "minecraft:air")
+                else:
+                    t.set(x, y, z, "minecraft:reinforced_deepslate")
+
+
+def forgotten_temple(variant, pedestals, murals):
+    """One variant of the temple.
+
+    `pedestals` names the glyph on each pedestal from west to east, `murals` the glyph and its
+    number of candles at each mural spot. The solution is the glyphs in order of their candles.
+    """
+    t = Template(TEMPLE_SIZE)
+    _room(t, 9, 1, 18, 11, 3, 20)     # corridor
+    _room(t, 5, 1, 12, 15, 5, 16)     # entrance hall
+    _room(t, 4, 1, 5, 16, 6, 10)      # glyph hall
+    _air(t, 9, 1, 17, 11, 3, 17)      # corridor to hall
+    _air(t, 9, 1, 11, 11, 3, 11)      # hall to glyph hall
+
+    # Floors of plain stone bricks; a trail of moss leads from the doorway to the vines.
+    for x, z in ((9, 10), (8, 10), (7, 10), (6, 10), (5, 10), (5, 9), (5, 8), (5, 7)):
+        t.set(x, 0, z, "minecraft:mossy_stone_bricks")
+
+    # The sanctum: reinforced deepslate all round, its seal of crying obsidian facing the glyph hall.
+    _vault_shell(t, 7, 1, 1, 13, 4, 3)
+    for x in range(9, 12):
+        for y in range(1, 4):
+            t.set(x, y, 4, "minecraft:crying_obsidian")
+    for x in (8, 12):
+        t.set(x, 1, 1, "minecraft:chest", nbt=SANCTUM_CHEST, facing="south")
+    t.set(10, 4, 2, "minecraft:soul_lantern", hanging="true")
+    t.set(10, 1, 1, "minecraft:candle", candles="3", lit="true")
+
+    # The reliquary: reinforced deepslate, its obsidian seal in the glyph hall's west wall.
+    _vault_shell(t, 1, 1, 7, 2, 2, 8)
+    for z in (7, 8):
+        for y in (1, 2):
+            t.set(3, y, z, "minecraft:obsidian")
+    for z in (6, 9):
+        for y in range(0, 4):
+            t.set(3, y, z, _brick(3, y, z))
+    t.set(1, 1, 7, "minecraft:chest", nbt=RELIQUARY_CHEST, facing="east")
+
+    # The fifth glyph above the seal, with a button, half hidden by vines.
+    t.set(3, 3, 7, SECRET_GLYPH)
+    t.set(4, 3, 7, "minecraft:stone_button", face="wall", facing="east", powered="false")
+    for y, z in ((1, 7), (2, 7), (1, 8), (2, 8), (3, 8), (4, 7), (4, 8), (5, 7)):
+        t.set(4, y, z, "minecraft:vine", west="true", up="false", north="false", south="false", east="false")
+
+    # Pedestals: polished tuff, the glyph, an unlit candle on top and a button on the south side.
+    for x, glyph in zip(PEDESTAL_XS, pedestals):
+        t.set(x, 1, 8, "minecraft:polished_tuff")
+        t.set(x, 2, 8, GLYPHS[glyph])
+        t.set(x, 3, 8, "minecraft:candle", candles="1", lit="false")
+        t.set(x, 2, 9, "minecraft:stone_button", face="wall", facing="south", powered="false")
+
+    # Murals: the glyph in the wall, lit candles in front, as many as its place in the order.
+    for ((gx, gy, gz), (px, pz)), (glyph, candles) in zip(MURALS, murals):
+        t.set(gx, gy, gz, GLYPHS[glyph])
+        t.set(px, 1, pz, "minecraft:polished_tuff")
+        t.set(px, 2, pz, "minecraft:candle", candles=str(candles), lit="true")
+    # The fifth glyph's mural: an empty plinth.
+    t.set(7, 2, 11, SECRET_GLYPH)
+    t.set(7, 1, 12, "minecraft:polished_tuff")
+
+    t.set(10, 4, 12, "minecraft:oak_wall_sign", facing="south", nbt={
+        "id": "minecraft:sign",
+        "front_text": {"messages": ["Wake the four", "as the flames", "count them.", "One more sleeps."]},
+        "back_text": {"messages": ["", "", "", ""]},
+    })
+
+    t.set(10, 3, 19, "minecraft:lantern", hanging="true")
+    t.set(10, 5, 14, "minecraft:soul_lantern", hanging="true")
+    t.set(10, 6, 7, "minecraft:soul_lantern", hanging="true")
+    for x, y, z in ((5, 5, 12), (15, 5, 16), (16, 6, 5), (4, 6, 10)):
+        t.set(x, y, z, "minecraft:cobweb")
+
+    t.write(OUTPUT / "forgotten_temple" / f"{variant}.nbt")
+
+
+def forgotten_temple_1():
+    forgotten_temple("variant_1", "ABCD", (("A", 3), ("B", 1), ("C", 4), ("D", 2)))
+
+
+def forgotten_temple_2():
+    forgotten_temple("variant_2", "CADB", (("D", 1), ("A", 4), ("B", 2), ("C", 3)))
+
+
+def forgotten_temple_3():
+    forgotten_temple("variant_3", "BDAC", (("C", 2), ("D", 3), ("A", 1), ("B", 4)))
+
+
+LAYOUTS = (lean_to, tent, cart, ruin, bandit_small, forgotten_temple_1, forgotten_temple_2, forgotten_temple_3)
 
 if __name__ == "__main__":
     for layout in LAYOUTS:

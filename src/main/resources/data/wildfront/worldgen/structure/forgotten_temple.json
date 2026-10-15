@@ -1,0 +1,21 @@
+{
+	"type": "minecraft:jigsaw",
+	"biomes": "#wildfront:has_structure/forgotten_temple",
+	"step": "underground_structures",
+	"spawn_overrides": {},
+	"terrain_adaptation": "none",
+	"start_pool": "wildfront:forgotten_temple/start",
+	"size": 1,
+	"start_height": {
+		"type": "minecraft:uniform",
+		"min_inclusive": {
+			"absolute": -36
+		},
+		"max_inclusive": {
+			"absolute": -6
+		}
+	},
+	"dimension_padding": 10,
+	"max_distance_from_center": 32,
+	"use_expansion_hack": false
+}

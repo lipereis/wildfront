@@ -4,13 +4,15 @@ A Minecraft Java Edition mod (Fabric) about dynamic exploration: rare world even
 discoveries and abandoned places that make the world feel unpredictable and alive, without
 replacing vanilla survival.
 
-**Version 0.5.0** for Minecraft 26.3 (Fabric). It adds:
+**Version 0.6.0** for Minecraft 26.3 (Fabric). It adds:
 
 - **Mysterious Discovery**, a dynamic event: a forgotten cache appears near a player who is out
   exploring, the player is told which way to look, and whoever opens it is rewarded.
 - **Abandoned camps**, small structures in four layouts with supplies left behind, in newly generated terrain.
 - **Bandit camps**, rarer camps that are still occupied: a few guards defend a better chest, and
   once they are defeated the camp stays cleared.
+- **The Forgotten Temple**, a buried temple with a glyph puzzle, a sealed sanctum and a hidden
+  reliquary.
 - A configurable, server-side event system the events are built on.
 
 | Abandoned camp | Forgotten cache |
@@ -22,7 +24,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full list of features and known limitat
 ## Installing
 
 1. Install [Fabric Loader](https://fabricmc.net/use/) 0.19.5 or newer for Minecraft 26.3.
-2. Download `wildfront-0.5.0+mc26.3.jar` from the
+2. Download `wildfront-0.6.0+mc26.3.jar` from the
    [latest release](https://github.com/lipereis/wildfront/releases/latest) (not the `-sources` file).
 3. Put it and [Fabric API](https://modrinth.com/mod/fabric-api) in the `mods` folder of the game
    directory that your Fabric installation uses.
@@ -109,7 +111,7 @@ To confirm the mod loaded, look for these lines in the console or in `run/logs/l
 
 ```
 [Wildfront] Registered 1 event(s): [mysterious_discovery]
-[Wildfront] Initialized (version 0.5.0+mc26.3, environment CLIENT)
+[Wildfront] Initialized (version 0.6.0+mc26.3, environment CLIENT)
 [Wildfront] Client initialized
 ```
 
@@ -353,6 +355,55 @@ chief's own drops are `loot_table/entities/guard_chief.json`. The structure uses
 `wildfront:flat_ground_jigsaw`, `min_distance_from_origin` (default 0): no structure closer than
 that many blocks, measured horizontally, to x 0, z 0.
 
+## The Forgotten Temple
+
+A temple buried deep underground, between 6 and 36 blocks below sea level. There is no way down
+from the surface: it is found by caving or mining into it. Its corridor ends open in the rock.
+
+| Sealed | Solved |
+|--------|--------|
+| ![The glyph hall: four pedestals with unlit candles before the sanctum's crying obsidian seal](docs/images/temple_sealed.png) | ![The same hall solved: the candles burn and the seal is gone, the sanctum's chests behind it](docs/images/temple_open.png) |
+
+The pictures were taken with night vision; the temple itself is dimly lit.
+
+- **The puzzle.** The glyph hall holds four pedestals, each topped with a different glyph block
+  and a candle, with a stone button on its front. The murals in the entrance hall show the same
+  four glyphs, each beside one to four burning candles, and a sign: *Wake the four as the flames
+  count them.* The candles give the order in which the buttons must be pressed.
+- **Feedback.** A right press lights the candle on that pedestal with a chime. A wrong one puts
+  every pedestal candle out and the order starts over; nothing breaks and there is no limit on
+  tries. Whoever presses, the presses count in the order they happen, so players can solve it
+  together.
+- **The sanctum.** When the fourth glyph is woken, the crying obsidian seal at the end of the
+  glyph hall crumbles. Two chests behind it hold iron, gold, emeralds, lapis, candles and
+  experience bottles, and one of an enchanted book, one or two diamonds or a golden apple.
+- **The secret.** The murals show a fifth glyph with no candles, and a trail of moss in the glyph
+  hall leads to a curtain of vines. Behind them, the fifth glyph has a button of its own: it
+  opens the obsidian seal of the reliquary, whose chest holds emeralds and one of two or three
+  diamonds, a wild armour trim template, a strongly enchanted book or an enchanted golden apple.
+  The secret is never needed to open the sanctum.
+- **No way round.** The sanctum and the reliquary are enclosed in reinforced deepslate, which
+  no explosion or piston moves. Until a seal is open, players in survival or adventure mode
+  cannot break it, the reinforced deepslate, the glyphs or the candles; ordinary walls can be
+  broken as usual. Players in creative mode are not stopped.
+- **Variants.** A temple is built from one of three variants, each with a different arrangement
+  of glyphs and order of candles. A temple turned any way by world generation works the same,
+  as the mod knows the glyphs by their kind of block, not by where they are.
+- **Where.** Below forests, jungles, taigas, lush caves and dripstone caves. Candidate spots are
+  about 512 blocks apart (spacing 32 chunks, separation 12) and kept away from trial chambers.
+  In the one world measured (seed `wildfront`), 8 of the first 25 candidate spots got a temple.
+  Only in chunks generated after the mod was added.
+- Each chest's loot is generated once, the first time it is opened, and shared by everyone.
+- Which temples were solved, and how far, is stored in the world save.
+  `/wildfront dungeon list` shows them. `/locate structure wildfront:forgotten_temple` finds one.
+  A temple built with `/place structure` looks right but is not recorded as a structure by the
+  game, so its puzzle does nothing.
+
+The layouts are generated by `tools/generate_structures.py` like the camps. Each variant's order
+is listed in `ForgottenTemple.SOLUTIONS`; a game test per variant reads the murals of the built
+template and checks that they give that order, then solves it, checks that the sanctum and
+reliquary cannot be reached before their seals open and can be after.
+
 ## Guard
 
 `wildfront:guard` is a human guard, the size and shape of a player. It is the mod's own entity
@@ -415,6 +466,7 @@ All require operator permission (game master level; cheats enabled in singleplay
 | `/wildfront event trigger <event> [player]` | Triggers an event now, ignoring cooldowns, chance and conditions, and starts the cooldowns |
 | `/wildfront event reset [player]` | Clears the player's event cooldowns |
 | `/wildfront camp list` | Shows the bandit camp settings and every camp visited so far, with its guards left or `cleared` |
+| `/wildfront dungeon list` | Shows the temples players have interacted with: how many glyphs are awake, whether solved, whether the secret is open |
 | `/wildfront camp reset` | Removes all loaded guards and forgets all camps, cleared ones included; camps are occupied again when a player comes near |
 | `/wildfront reload` | Reloads the config file and reports problems |
 
@@ -468,6 +520,7 @@ src/main/java/dev/wildfront/
   event/type/          concrete events
   discovery/           forgotten cache: site selection, placement, tracking, expiry
   camp/                bandit camps: who guards them, spawning, tracking, clearing
+  dungeon/             the Forgotten Temple's puzzle, seals and saved progress
   entity/              the guard
   registry/            central registration of events, data attachments, loot table keys and structure types
   worldgen/            structure type that only generates on dry, level ground
@@ -493,8 +546,8 @@ docs/images/           screenshots taken by the client game test
 5. Commit, push and wait for the build workflow to pass. Then tag and push the tag:
 
    ```
-   git tag v0.5.0
-   git push origin v0.5.0
+   git tag v0.6.0
+   git push origin v0.6.0
    ```
 
    The release workflow builds the tagged commit, runs the tests, and publishes a GitHub release

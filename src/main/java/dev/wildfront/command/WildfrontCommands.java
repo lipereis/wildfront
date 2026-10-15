@@ -14,6 +14,8 @@ import dev.wildfront.camp.CampState;
 import dev.wildfront.config.ConfigManager;
 import dev.wildfront.config.EventConfig;
 import dev.wildfront.config.HostileCampConfig;
+import dev.wildfront.dungeon.DungeonState;
+import dev.wildfront.dungeon.ForgottenTemple;
 import dev.wildfront.config.WildfrontConfig;
 import dev.wildfront.event.EventScheduler;
 import dev.wildfront.event.EventSettings;
@@ -45,6 +47,8 @@ public final class WildfrontCommands {
 				Commands.literal("wildfront")
 						.requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
 						.then(Commands.literal("reload").executes(WildfrontCommands::reload))
+						.then(Commands.literal("dungeon")
+								.then(Commands.literal("list").executes(WildfrontCommands::listDungeons)))
 						.then(Commands.literal("camp")
 								.then(Commands.literal("list").executes(WildfrontCommands::listCamps))
 								.then(Commands.literal("reset").executes(WildfrontCommands::resetCamps)))
@@ -76,6 +80,19 @@ public final class WildfrontCommands {
 		}
 
 		return camps.size();
+	}
+
+	private static int listDungeons(CommandContext<CommandSourceStack> context) {
+		CommandSourceStack source = context.getSource();
+		List<DungeonState> dungeons = ForgottenTemple.states(source.getServer().overworld());
+		source.sendSuccess(() -> Component.literal("Wildfront dungeons touched so far: " + dungeons.size()), false);
+
+		for (DungeonState dungeon : dungeons) {
+			source.sendSuccess(() -> Component.literal(" - " + dungeon.origin().toShortString() + ": "
+					+ (dungeon.solved() ? "solved" : dungeon.progress() + " of 4 glyphs awake") + (dungeon.secretOpen() ? ", secret open" : "")), false);
+		}
+
+		return dungeons.size();
 	}
 
 	private static int resetCamps(CommandContext<CommandSourceStack> context) {

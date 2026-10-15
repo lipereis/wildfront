@@ -50,6 +50,18 @@ public final class WildfrontStructures {
 	 */
 	public static final List<Identifier> BANDIT_CAMP_LAYOUTS = List.of(Wildfront.id("bandit_camp/small_1"));
 
+	public static final ResourceKey<Structure> FORGOTTEN_TEMPLE = ResourceKey.create(Registries.STRUCTURE, Wildfront.id("forgotten_temple"));
+	public static final ResourceKey<StructureSet> FORGOTTEN_TEMPLES = ResourceKey.create(Registries.STRUCTURE_SET, Wildfront.id("forgotten_temples"));
+	public static final ResourceKey<StructureTemplatePool> FORGOTTEN_TEMPLE_START_POOL = ResourceKey.create(Registries.TEMPLATE_POOL, Wildfront.id("forgotten_temple/start"));
+
+	/**
+	 * Every variant of the Forgotten Temple; each has its own order of glyphs.
+	 */
+	public static final List<Identifier> FORGOTTEN_TEMPLE_VARIANTS = List.of(
+			Wildfront.id("forgotten_temple/variant_1"),
+			Wildfront.id("forgotten_temple/variant_2"),
+			Wildfront.id("forgotten_temple/variant_3"));
+
 	public static final TagKey<Biome> HAS_ABANDONED_CAMP = TagKey.create(Registries.BIOME, Wildfront.id("has_structure/abandoned_camp"));
 
 	private WildfrontStructures() {
